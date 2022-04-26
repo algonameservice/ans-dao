@@ -237,13 +237,13 @@ def approval_program(ARG_GOV_TOKEN):
         ),
         Assert(
             Or(
-                Gtxn[1].application_args[0] == Bytes("social"),
-                Gtxn[1].application_args[0] == Bytes("funding"),
-                Gtxn[1].application_args[0] == Bytes("updatereg"),
+                Gtxn[1].application_args[1] == Bytes("social"),
+                Gtxn[1].application_args[1] == Bytes("funding"),
+                Gtxn[1].application_args[1] == Bytes("updatereg"),
             )
         ),
 
-        Assert(Btoi(Gtxn[1].application_args[1])<=max_duration),
+        Assert(Btoi(Gtxn[1].application_args[2])<=max_duration),
 
         # TODO: do basic checks for txns
         #TODO: do basic checks for url input
@@ -251,10 +251,10 @@ def approval_program(ARG_GOV_TOKEN):
         #App.globalPut(Bytes("proposal_id"), Add(proposal_id,Int(1))),
         App.globalPut(Bytes("proposal_id"), Int(1)),
         App.globalPut(Bytes("proposal_initiator"), Gtxn[0].sender()),
-        App.globalPut(Bytes("proposal_type"), Gtxn[1].application_args[0]),
+        App.globalPut(Bytes("proposal_type"), Gtxn[1].application_args[1]),
         App.globalPut(Bytes("voting_start"), Global.latest_timestamp()),
         App.globalPut(Bytes("voting_end"), Add(App.globalGet(voting_start), Mul(App.globalGet(voting_start),Int(86400)))),
-        App.globalPut(Bytes("proposal_url"),Gtxn[1].application_args[2]),
+        App.globalPut(Bytes("proposal_url"),Gtxn[1].application_args[3]),
         #Assert(App.globalGet(votecount_yes)==Int(0)),
         #Assert(App.globalGet(votecount_no)==Int(0)),
 
@@ -262,7 +262,7 @@ def approval_program(ARG_GOV_TOKEN):
         max_funding_amt_algos.store(Div(balance_reg_treasury.load(),Int(5))),
         store_balance_dao_treasury(Global.current_application_address()),
         max_funding_amt_ans.store(Div(balance_dao_treasury.load(),Int(5))),
-        If(Gtxn[1].application_args[0]==Bytes("funding"))
+        If(Gtxn[1].application_args[1]==Bytes("funding"))
         .Then(
             Seq( 
                 # TODO: Check maybe value
@@ -281,7 +281,7 @@ def approval_program(ARG_GOV_TOKEN):
                 ),
                 App.globalPut(proposal_funding_amt_ans, Gtxn[1].application_args[5])
             ),
-        ).ElseIf(Gtxn[1].application_args[0]==Bytes("UpdateReg"))
+        ).ElseIf(Gtxn[1].application_args[1]==Bytes("UpdateReg"))
         .Then( App.globalPut(reg_app_id_to_update, Btoi(Gtxn[1].application_args[4]))
         ),
         Return(Int(1))
