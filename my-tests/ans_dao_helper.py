@@ -344,8 +344,9 @@ def DAOAddProposalSocial(algod_client, pk_sender, gov_asaid, deposit_amt,  dao_a
 		index=dao_app_id,
 		foreign_apps=[dao_app_id],
 		app_args=[
+			"add_proposal",
 			"social",
-			"70",
+			7,
 			"https://github.com/someproposal"
 		],
 		rekey_to=None
