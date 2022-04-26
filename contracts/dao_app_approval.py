@@ -150,6 +150,36 @@ def approval_program(ARG_GOV_TOKEN):
         Return(Int(1))
     ])
 
+    acct_reg_treasury = ScratchVar(TealType.bytes)
+    balance_reg_treasury = ScratchVar(TealType.uint64)
+    balance_dao_treasury = ScratchVar(TealType.uint64)
+    max_funding_amt_algos = ScratchVar(TealType.uint64)
+    max_funding_amt_ans = ScratchVar(TealType.uint64)
+
+    @Subroutine(TealType.none)
+    def store_app_address():
+        return Seq([
+            addr := AppParam.address(Int(1)),
+            If(addr.hasValue(), 
+            acct_reg_treasury.store(addr.value()))
+        ])
+
+    @Subroutine(TealType.none)
+    def store_balance_reg_treasury(param):
+        return Seq(
+            balance := AccountParam.balance(param),
+            If(balance.hasValue(),
+            balance_reg_treasury.store(balance.value()))
+        )
+
+    @Subroutine(TealType.none)
+    def store_balance_dao_treasury(param):
+        return Seq(
+            balance := AccountParam.balance(param),
+            If(balance.hasValue(),
+            balance_dao_treasury.store(balance.value()))
+        )               
+
     # Global Vars Proposal:
 
     # TODO: Init these vars in initialize method
@@ -188,18 +218,15 @@ def approval_program(ARG_GOV_TOKEN):
         txn.asset_close_to() == Global.zero_address()
     )
 
-    acct_reg_treasury = ScratchVar(TealType.bytes)
-    balance_reg_treasury = ScratchVar(TealType.uint64)
-    balance_dao_treasury = ScratchVar(TealType.uint64)
-    max_funding_amt_algos = ScratchVar(TealType.uint64)
-    max_funding_amt_ans = ScratchVar(TealType.uint64)
+
 
     # App-args: 
     # Social - [ type Social , duration (no. of days), url ]
     # Funding - [ type Funding , duration (no. of days), url, reg_app_id, amt_algos, amt_ans ]
     # UpdateReg - [ type UpdateReg , duration (no. of days), url, reg_app_id, approval_program ]
     add_proposal = Seq([
-        Assert(proposal_status == Bytes("completed")),
+        # TODO: Uncomment below once vars are initiatilized
+        #Assert(proposal_status == Bytes("completed")),
         Assert(Global.group_size()==Int(2)),
 
         Assert(
@@ -212,7 +239,7 @@ def approval_program(ARG_GOV_TOKEN):
             Or(
                 Gtxn[1].application_args[0] == Bytes("social"),
                 Gtxn[1].application_args[0] == Bytes("funding"),
-                Gtxn[1].application_args[0] == Bytes("UpdateReg"),
+                Gtxn[1].application_args[0] == Bytes("updatereg"),
             )
         ),
 
@@ -221,19 +248,19 @@ def approval_program(ARG_GOV_TOKEN):
         # TODO: do basic checks for txns
         #TODO: do basic checks for url input
 
-        App.globalPut(Bytes("proposal_id"), Add(proposal_id,Int(1))),
+        #App.globalPut(Bytes("proposal_id"), Add(proposal_id,Int(1))),
+        App.globalPut(Bytes("proposal_id"), Int(1)),
         App.globalPut(Bytes("proposal_initiator"), Gtxn[0].sender()),
         App.globalPut(Bytes("proposal_type"), Gtxn[1].application_args[0]),
         App.globalPut(Bytes("voting_start"), Global.latest_timestamp()),
         App.globalPut(Bytes("voting_end"), Add(App.globalGet(voting_start), Mul(App.globalGet(voting_start),Int(86400)))),
         App.globalPut(Bytes("proposal_url"),Gtxn[1].application_args[2]),
-        Assert(App.globalGet(votecount_yes)==Int(0)),
-        Assert(App.globalGet(votecount_no)==Int(0)),
+        #Assert(App.globalGet(votecount_yes)==Int(0)),
+        #Assert(App.globalGet(votecount_no)==Int(0)),
 
-        acct_reg_treasury.store(AppParam.address(Btoi(Gtxn[1].application_args[4])).value()),
-        balance_reg_treasury.store(AccountParam.balance(acct_reg_treasury.load()).value()),
+        store_balance_reg_treasury(Txn.applications[1]),
         max_funding_amt_algos.store(Div(balance_reg_treasury.load(),Int(5))),
-        balance_dao_treasury.store(AccountParam.balance(Global.current_application_address()).value()),
+        store_balance_dao_treasury(Global.current_application_address()),
         max_funding_amt_ans.store(Div(balance_dao_treasury.load(),Int(5))),
         If(Gtxn[1].application_args[0]==Bytes("funding"))
         .Then(
@@ -484,5 +511,5 @@ def approval_program(ARG_GOV_TOKEN):
     return program
 
 with open('dao_app_approval.teal', 'w') as f:
-    compiled = compileTeal(approval_program(85778236), Mode.Application, version=5)
+    compiled = compileTeal(approval_program(85778236), Mode.Application, version=6)
     f.write(compiled)

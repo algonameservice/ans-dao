@@ -323,6 +323,46 @@ def DAOOptInToGOVASA(algod_client, pk_sender, gov_asaid, dao_app_id):
 	except Exception as err:
 		print(err)
 
+def DAOAddProposalSocial(algod_client, pk_sender, gov_asaid, deposit_amt,  dao_app_id):
+
+	Grp_txns_unsign = []
+
+	deposit_txn = transaction.AssetTransferTxn(
+		sender=account.address_from_private_key(pk_sender),
+		sp=algod_client.suggested_params(),
+		amt=deposit_amt,
+		receiver=logic.get_application_address(dao_app_id),
+		index=gov_asaid,
+		close_assets_to=None,
+		rekey_to=None
+	)
+	Grp_txns_unsign.append(deposit_txn)
+
+	txn_add_proposal = transaction.ApplicationNoOpTxn(
+		sender=account.address_from_private_key(pk_sender),
+		sp=algod_client.suggested_params(),
+		index=dao_app_id,
+		foreign_apps=[dao_app_id],
+		app_args=[
+			"social",
+			"70",
+			"https://github.com/someproposal"
+		],
+		rekey_to=None
+	)
+	Grp_txns_unsign.append(txn_add_proposal)
+
+	Grp_txns_packed_unsigned = transaction.assign_group_id(Grp_txns_unsign)
+	Grp_txns_signed = []
+	
+	for i in range(2):
+		Grp_txns_signed.append(Grp_txns_unsign[i].sign(pk_sender))
+	
+	try:
+		algod_client.send_transactions(Grp_txns_signed)
+		wait_for_confirmation(algod_client, transaction.calculate_group_id(Grp_txns_unsign))
+	except Exception as err:
+		print(err)
 
 # helper function to compile program source
 def compile_program(algod_client, source_code) :
@@ -353,7 +393,6 @@ def main():
 	'''
 	asaid = DeployANSToken(my_algod_client, funding_acct_mnemonic)
 
-	new_acct_addr, new_acct_mnemonic = GenerateAccount()
 	FundNewAccount(my_algod_client, new_acct_addr, 1000000,funding_acct_mnemonic)    
 
 	ASAOptIn(my_algod_client, mnemonic.to_private_key(new_acct_mnemonic), asaid)
@@ -362,12 +401,21 @@ def main():
 	'''
 	GOV_ASA_ID = 85778236
 	DAO_APP_ID=DeployANSDAO(my_algod_client,funding_acct_mnemonic,GOV_ASA_ID)
+	#DAO_APP_ID=86039171
 
 	acct_dao_escrow = logic.get_application_address(DAO_APP_ID)
 	print("DAO Escrow add: "+acct_dao_escrow)
+	
 	FundNewAccount(my_algod_client, acct_dao_escrow, 1000000, funding_acct_mnemonic)
 
 	DAOOptInToGOVASA(my_algod_client, mnemonic.to_private_key(funding_acct_mnemonic), GOV_ASA_ID, DAO_APP_ID)
+
+	new_acct_addr, new_acct_mnemonic = GenerateAccount()
+	FundNewAccount(my_algod_client, new_acct_addr, 1000000, funding_acct_mnemonic)
+	ASAOptIn(my_algod_client, mnemonic.to_private_key(new_acct_mnemonic), GOV_ASA_ID)
+	TransferASA(my_algod_client,20001000,mnemonic.to_private_key(funding_acct_mnemonic),new_acct_addr,GOV_ASA_ID)
+
+	DAOAddProposalSocial(my_algod_client,mnemonic.to_private_key(funding_acct_mnemonic),GOV_ASA_ID, 200001, DAO_APP_ID)
 
 if __name__ == "__main__":
 	main()
