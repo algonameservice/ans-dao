@@ -253,13 +253,16 @@ def DeployANSDAO(algod_client, contract_owner_mnemonic, gov_asaid):
 	local_schema = transaction.StateSchema(local_ints, local_bytes)
 	
 	on_complete = transaction.OnComplete.NoOpOC.real
-
+	min_deposit = 200000
+	min_support = 200
+	min_duration = 604800
+	max_duration = 864000
 	appargs = [
-		200000, # min deposit
-		200, # min support
-		604800, # min duration
-		864000, # max duration
-		"https://ansdao.org" #url
+		min_deposit.to_bytes(8, 'big'), # min deposit
+		min_support.to_bytes(8, 'big'), # min support
+		min_duration.to_bytes(8, 'big'), # min duration
+		max_duration.to_bytes(8, 'big'), # max duration
+		"https://ansdao.org".encode('utf-8') #url
 	]
 	
 	compileTeal(approval_program(gov_asaid), Mode.Application, version=6)
@@ -336,7 +339,10 @@ def DAOAddProposalSocial(algod_client, pk_sender, gov_asaid, deposit_amt,  dao_a
 		close_assets_to=None,
 		rekey_to=None
 	)
+	
 	Grp_txns_unsign.append(deposit_txn)
+
+	max_duration = 70
 
 	txn_add_proposal = transaction.ApplicationNoOpTxn(
 		sender=account.address_from_private_key(pk_sender),
@@ -344,12 +350,15 @@ def DAOAddProposalSocial(algod_client, pk_sender, gov_asaid, deposit_amt,  dao_a
 		index=dao_app_id,
 		foreign_apps=[dao_app_id],
 		app_args=[
-			"social",
-			"70",
+			"add_proposal".encode("utf-8"),
+			"social".encode("utf-8"),
+			max_duration.to_bytes(8, 'big'),
 			"https://github.com/someproposal"
 		],
 		rekey_to=None
 	)
+
+	
 	Grp_txns_unsign.append(txn_add_proposal)
 
 	Grp_txns_packed_unsigned = transaction.assign_group_id(Grp_txns_unsign)
@@ -358,11 +367,15 @@ def DAOAddProposalSocial(algod_client, pk_sender, gov_asaid, deposit_amt,  dao_a
 	for i in range(2):
 		Grp_txns_signed.append(Grp_txns_unsign[i].sign(pk_sender))
 	
+	
+	
 	try:
+		txn_id = Grp_txns_signed[1].transaction.get_txid()
 		algod_client.send_transactions(Grp_txns_signed)
-		wait_for_confirmation(algod_client, transaction.calculate_group_id(Grp_txns_unsign))
+		wait_for_confirmation(algod_client, txn_id)
 	except Exception as err:
 		print(err)
+	
 
 # helper function to compile program source
 def compile_program(algod_client, source_code) :
@@ -415,7 +428,7 @@ def main():
 	ASAOptIn(my_algod_client, mnemonic.to_private_key(new_acct_mnemonic), GOV_ASA_ID)
 	TransferASA(my_algod_client,20001000,mnemonic.to_private_key(funding_acct_mnemonic),new_acct_addr,GOV_ASA_ID)
 
-	DAOAddProposalSocial(my_algod_client,mnemonic.to_private_key(funding_acct_mnemonic),GOV_ASA_ID, 200001, DAO_APP_ID)
+	DAOAddProposalSocial(my_algod_client,mnemonic.to_private_key(funding_acct_mnemonic),GOV_ASA_ID, 200000, DAO_APP_ID)
 
 if __name__ == "__main__":
 	main()
