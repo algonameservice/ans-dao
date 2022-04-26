@@ -251,14 +251,13 @@ def approval_program(ARG_GOV_TOKEN):
         #App.globalPut(Bytes("proposal_id"), Add(proposal_id,Int(1))),
         App.globalPut(Bytes("proposal_id"), Int(1)),
         App.globalPut(Bytes("proposal_initiator"), Gtxn[0].sender()),
-        App.globalPut(Bytes("proposal_type"), Gtxn[1].application_args[0]),
+        App.globalPut(Bytes("proposal_type"), Gtxn[1].application_args[1]),
         App.globalPut(Bytes("voting_start"), Global.latest_timestamp()),
         App.globalPut(Bytes("voting_end"), Add(App.globalGet(voting_start), Mul(App.globalGet(voting_start),Int(86400)))),
-        App.globalPut(Bytes("proposal_url"),Gtxn[1].application_args[2]),
+        App.globalPut(Bytes("proposal_url"),Gtxn[1].application_args[3]),
         #Assert(App.globalGet(votecount_yes)==Int(0)),
         #Assert(App.globalGet(votecount_no)==Int(0)),
 
-        
         If(Gtxn[1].application_args[1]==Bytes("funding"))
         .Then(
             Seq( 
