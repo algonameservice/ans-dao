@@ -68,6 +68,6 @@ pip3 install -r requirements.txt
 ```
 Run tests
 ```
-cd my-tests
+cd tests
 python3 ans_dao_helper.py
 ```
