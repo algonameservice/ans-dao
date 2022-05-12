@@ -1,6 +1,6 @@
 from email.parser import BytesParser
 import sys
-#sys.path.insert(0,'..')
+from numpy import byte, uint
 
 from pyteal import *
 
@@ -19,100 +19,55 @@ def approval_program(ARG_GOV_TOKEN):
         clear_proposal          clears proposal record and returns back the deposit
     """
 
-    # Verfies deposit of gov_token to an address for a transaction. Args:
-    # * tx_index (index of deposit transaction)
-    # * receiver (receiver of gov_token)
-    def verify_deposit(tx_index: Int, receiver: Addr):
-        return Assert(And(
-            Global.group_size() >= tx_index,
-            Gtxn[tx_index].type_enum() == TxnType.AssetTransfer,
-            Gtxn[tx_index].xfer_asset() == Int(ARG_GOV_TOKEN),
-            Gtxn[tx_index].asset_receiver() == receiver,
-            Gtxn[tx_index].asset_amount() >= Int(0)
-        ))
-
-    # scratch vars to save result() & scratch_proposal_active()
-    scratchvar_result = ScratchVar(TealType.uint64)
-    scratchvar_proposal_active = ScratchVar(TealType.uint64)
-
-    # scratch vars to store proposal config
-    scratchvar_voting_start = ScratchVar(TealType.uint64)
-    scratchvar_voting_end = ScratchVar(TealType.uint64)
-    scratchvar_execute_before = ScratchVar(TealType.uint64)
-    scratchvar_proposal_type = ScratchVar(TealType.uint64)
-
-    # propsal is passed if
-    # 1. voting is over and
-    # 2. proposal.yes >= min_support and
-    # 3. proposal.yes > proposal.no
-    def is_proposal_passed(idx: Int):
-        return And(
-            Global.latest_timestamp() > App.localGet(idx, Bytes("voting_end")),
-            App.localGet(idx, Bytes("yes")) >= App.globalGet(min_support),
-            App.localGet(idx, Bytes("yes")) > App.localGet(idx, Bytes("no"))
-        )
-
-    # Computes result of proposal. Saves result in scratch. Args:
-    # * idx - index of account where proposal_lsig.address() is passed
-    # NOTE: idx == Int(0) means proposalLsig is Txn.sender()
-    def compute_result(idx: Int):
-        return Seq([
-            Cond(
-                # 4 if proposal expired (now > proposal.execute_before())
-                [Global.latest_timestamp() > App.localGet(idx, Bytes("execute_before")), scratchvar_result.store(Int(4))],
-                # 3 if voting is still in progress (now <= voting_end)
-                [Global.latest_timestamp() <= App.localGet(idx, Bytes("voting_end")), scratchvar_result.store(Int(3))],
-                # 1 if voting is over and proposal.yes >= min_support and proposal.yes > proposal.no
-                [
-                    is_proposal_passed(idx) == Int(1),
-                    scratchvar_result.store(Int(1))
-                ],
-                [
-                    # if proposal is not expired, not in progess, and not passed, then reject (set result == Int(2))
-                    And(
-                        Global.latest_timestamp() <= App.localGet(idx, Bytes("execute_before")),
-                        Global.latest_timestamp() > App.localGet(idx, Bytes("voting_end")),
-                        is_proposal_passed(idx) == Int(0)
-                    ),
-                    scratchvar_result.store(Int(2))
-                ]
-            ),
-        ])
-
-    # Checks if the proposal is active or not. Saves result in scratchvar_proposal_active. Args:
-    # * idx - index of account where proposal_lsig.address() is passed
-    # NOTE: idx == Int(0) means proposalLsig is Txn.sender()
-    def scratch_proposal_active(idx: Int):
-        return Seq([
-            compute_result(idx),
-            If(
-                Or(
-                    # still in voting (now <= voting_end)
-                    Global.latest_timestamp() <= App.localGet(idx, Bytes("voting_end")),
-                    # OR succeeded but not executed (now <= execute_before && result() == 1 && executed == 0)
-                    And (
-                        Global.latest_timestamp() <= App.localGet(idx, Bytes("execute_before")),
-                        scratchvar_result.load() == Int(1),
-                        App.localGet(idx, Bytes("executed")) == Int(0)
-                    )
-                ),
-                scratchvar_proposal_active.store(Int(1)),
-                # NOTE: we store Int(2) as "NO" because Int(0) can also be default value
-                scratchvar_proposal_active.store(Int(2)),
-            )
-        ])
-
     # global DAO parameters
-    # minimum deposit in gov_tokens required to make a proposal
+    govtoken_asa_id = Bytes("GOV_TOKEN_ASA_ID")
     deposit = App.globalGet(Bytes("deposit"))
-    # minimum number of yes power votes to validate the proposal
     min_support = App.globalGet(Bytes("min_support"))
-    # minimum voting time (in number of seconds) for a new proposal
     min_duration = App.globalGet(Bytes("min_duration"))
-    # maximum voting time (in number of seconds) for a new proposal
     max_duration = App.globalGet(Bytes("max_duration"))
-    # a url with more information about the DAO
     url = App.globalGet(Bytes("url"))
+
+    # Proposal params
+    bytes_proposal_id = Bytes("proposal_id")
+    bytes_proposal_result = Bytes("UNKNOWN") # PASSED, REJECTED
+    bytes_proposal_initiator = Bytes("proposal_initiator") # Acct Addr
+    bytes_proposal_status = Bytes("proposal_status") # Active, Completed
+    bytes_proposal_type = Bytes("proposal_type") # Social/Funding/UpdateReg
+    bytes_voting_start = Bytes("voting_start") # Unix Timestamp
+    bytes_voting_end = Bytes("voting_end") # Unix Timestamp
+    bytes_proposal_url = Bytes("proposal_url") # URI
+    bytes_votecount_yes = Bytes("votecount_yes") # No. of yes
+    bytes_votecount_no = Bytes("votecount_no") # No. of no
+    bytes_votecount_abstain = Bytes("votecount_abstain") # No. of no
+    bytes_proposal_funding_amt_algo = Bytes("proposal_funding_amt_algo")
+    bytes_proposal_funding_amt_ans = Bytes("proposal_funding_amt_asa")
+    bytes_funding_recipient = Bytes("funding_recipient")
+    bytes_reg_app_id_to_update = Bytes("reg_app_id_to_update")
+    bytes_total_coins_voted = Bytes("total_coins_voted")
+    bytes_reg_app_progrm_hash = Bytes("reg_app_progrm_hash") # For ex: 123456
+    bytes_reg_clear_progrm_hash = Bytes("reg_clear_progrm_hash") # For ex: 123456
+    proposal_id_global = App.globalGet(bytes_proposal_id)
+
+    @Subroutine(TealType.none)
+    def ResetProposalParams():
+        return Seq([
+        App.globalPut(bytes_proposal_initiator,Bytes("NONE")),
+        App.globalPut(bytes_proposal_status,Bytes("completed")),
+        App.globalPut(bytes_proposal_type,Bytes("NONE")),
+        App.globalPut(bytes_voting_start,Int(0)),
+        App.globalPut(bytes_voting_end,Int(0)),
+        App.globalPut(bytes_proposal_url,Bytes("NONE")),
+        App.globalPut(bytes_reg_app_progrm_hash,Bytes("NONE")),
+        App.globalPut(bytes_reg_clear_progrm_hash,Bytes("NONE")),
+        App.globalPut(bytes_votecount_yes,Int(0)),
+        App.globalPut(bytes_votecount_no,Int(0)),
+        App.globalPut(bytes_votecount_abstain,Int(0)),
+        App.globalPut(bytes_proposal_funding_amt_algo,Int(0)),
+        App.globalPut(bytes_proposal_funding_amt_ans,Int(0)),
+        App.globalPut(bytes_funding_recipient,Global.zero_address()),
+        App.globalPut(bytes_reg_app_id_to_update,Int(0)),
+        App.globalPut(bytes_total_coins_voted, Int(0))
+    ])
 
     # initialization
     # Expected arguments:
@@ -131,6 +86,9 @@ def approval_program(ARG_GOV_TOKEN):
         App.globalPut(Bytes("min_duration"), Btoi(Txn.application_args[2])),
         App.globalPut(Bytes("max_duration"), Btoi(Txn.application_args[3])),
         App.globalPut(Bytes("url"), Txn.application_args[4]),
+        App.globalPut(govtoken_asa_id, Txn.assets[0]),
+        ResetProposalParams(),
+        App.globalPut(bytes_proposal_id,Int(31420)),
         Return(Int(1))
     ])
 
@@ -155,6 +113,7 @@ def approval_program(ARG_GOV_TOKEN):
     balance_dao_treasury = ScratchVar(TealType.uint64)
     max_funding_amt_algos = ScratchVar(TealType.uint64)
     max_funding_amt_ans = ScratchVar(TealType.uint64)
+    acct_balance_asa = ScratchVar(TealType.uint64)
 
     @Subroutine(TealType.none)
     def store_app_address():
@@ -179,90 +138,81 @@ def approval_program(ARG_GOV_TOKEN):
             If(balance.hasValue(),
             balance_dao_treasury.store(balance.value()))
         )               
+    
+    @Subroutine(TealType.none)
+    def store_voters_token_balance(addr_sender, asaid) :
+        return Seq(
+            balance := AssetHolding.balance(addr_sender, asaid),
+            If(balance.hasValue())
+            .Then(
+                acct_balance_asa.store(balance.value())
+            ).Else(
+                acct_balance_asa.store(Int(0))
+            )
+        )
+    
+    users_last_proposal = ScratchVar(TealType.uint64)
+    @Subroutine(TealType.none)
+    def get_users_last_proposal():
+        return Seq([
+            last_proposal := App.localGetEx(Int(0), Int(0), bytes_proposal_id),
+            If(last_proposal.hasValue() == Int(1))
+            .Then( users_last_proposal.store(last_proposal.value()))
+            .Else( users_last_proposal.store(Int(0))),
+        ])
 
-    # Global Vars Proposal:
-
-    # TODO: Init these vars in initialize method
-    proposal_id = App.globalGet(Bytes("proposal_id")) # For ex: 123456
-    proposal_initiator = Bytes("proposal_initiator_address") # Acct Addr
-    proposal_status = Bytes("proposal_status") # Active, Completed
-    proposal_type = Bytes("proposal_type") # Social/Funding/UpdateReg
-    voting_start = Bytes("voting_start") # Block No.
-    voting_end = Bytes("voting_end") # Block No.
-    proposal_url = Bytes("proposal_url") # URI
-    votecount_yes = Bytes("votecount_yes") # No. of yes
-    votecount_no = Bytes("votecount_no") # No. of no
-    proposal_funding_amt_algo = Bytes("proposal_funding_amt_algo")
-    proposal_funding_amt_ans = Bytes("proposal_funding_amt_asa")
-    proposal_funding_amt_recipient = Bytes("proposal_funding_amt_recipient")
-    reg_app_id_to_update = Bytes("reg_app_id_to_update")
-
-    # TODO: Remove if not needed, we added separate OptIn
-    # Why a separate lsig account address when the smart contract can store the amount?
-    # Saves deposit lsig account addresses in app global state
-    # Expected arguments: [deposit_lsig]
-    add_deposit_accounts = Seq([
+    basic_checks_xfer = Seq([
         Assert(
             And(
-                Global.group_size() == Int(1),
-                Global.creator_address() == Txn.sender()
+                Txn.rekey_to() == Global.zero_address(),
+                Txn.asset_close_to() == Global.zero_address(),
+                TxnField.close_remainder_to == Global.zero_address(),
             )
-        ),
-        App.globalPut(Bytes("deposit_lsig"), Txn.application_args[1]),
-        Return(Int(1))
+        )
     ])
-
-    def basic_checks(txn: Txn): return And(
-        txn.rekey_to() == Global.zero_address(),
-        txn.close_remainder_to() == Global.zero_address(),
-        txn.asset_close_to() == Global.zero_address()
-    )
-
-
 
     # App-args: 
     # Social - [ type Social , duration (no. of days), url ]
-    # Funding - [ type Funding , duration (no. of days), url, reg_app_id, amt_algos, amt_ans ]
+    # Funding - [ type Funding , duration (no. of days), url, amt_algos, amt_ans ];
+    #           foreign-accounts = [<funding_recipient>];
+    #           foreign-apps = [reg_app_id]
     # UpdateReg - [ type UpdateReg , duration (no. of days), url, reg_app_id, approval_program ]
     add_proposal = Seq([
         # TODO: Uncomment below once vars are initiatilized
-        #Assert(proposal_status == Bytes("completed")),
-        Assert(Global.group_size()==Int(2)),
-
         Assert(
-            And(
+            And( 
+                App.globalGet(bytes_proposal_status) == Bytes("completed"),
+                Global.group_size()==Int(2),
+                App.globalGet(bytes_votecount_yes)==Int(0),
+                App.globalGet(bytes_votecount_no)==Int(0),
+                App.globalGet(bytes_votecount_abstain)==Int(0),
+                Btoi(Gtxn[1].application_args[2])<=max_duration,
+                Gtxn[0].type_enum() == TxnType.AssetTransfer,
                 Gtxn[0].asset_receiver() == Global.current_application_address(),
-                Gtxn[0].asset_amount() == deposit
+                Gtxn[0].asset_amount() == deposit,
+                Or(
+                    Gtxn[1].application_args[1] == Bytes("social"),
+                    Gtxn[1].application_args[1] == Bytes("funding"),
+                    Gtxn[1].application_args[1] == Bytes("updatereg"),
+                )
             )
         ),
-        Assert(
-            Or(
-                Gtxn[1].application_args[1] == Bytes("social"),
-                Gtxn[1].application_args[1] == Bytes("funding"),
-                Gtxn[1].application_args[1] == Bytes("updatereg"),
-            )
-        ),
-
-        Assert(Btoi(Gtxn[1].application_args[2])<=max_duration),
-
         # TODO: do basic checks for txns
         #TODO: do basic checks for url input
-
-        #App.globalPut(Bytes("proposal_id"), Add(proposal_id,Int(1))),
-        App.globalPut(Bytes("proposal_id"), Int(1)),
-        App.globalPut(Bytes("proposal_initiator"), Gtxn[0].sender()),
-        App.globalPut(Bytes("proposal_type"), Gtxn[1].application_args[1]),
+        App.globalPut(bytes_proposal_id, Add(proposal_id_global,Int(1))),
+        App.globalPut(bytes_proposal_initiator, Gtxn[0].sender()),
+        App.globalPut(bytes_proposal_type, Gtxn[1].application_args[1]),
         App.globalPut(Bytes("voting_start"), Global.latest_timestamp()),
-        App.globalPut(Bytes("voting_end"), Add(App.globalGet(voting_start), Mul(App.globalGet(voting_start),Int(86400)))),
-        App.globalPut(Bytes("proposal_url"),Gtxn[1].application_args[3]),
-        #Assert(App.globalGet(votecount_yes)==Int(0)),
-        #Assert(App.globalGet(votecount_no)==Int(0)),
-
+        #App.globalPut(Bytes("voting_end"), Add(Global.latest_timestamp(), Mul(Btoi(Gtxn[1].application_args[2]),Int(86400)))),
+        App.globalPut(Bytes("voting_end"), Add(Global.latest_timestamp(), Mul(Btoi(Gtxn[1].application_args[2]),Int(60)))),
+        App.globalPut(bytes_proposal_url, Gtxn[1].application_args[3]),
+        App.globalPut(bytes_proposal_status, Bytes("active")),
+        App.globalPut(bytes_proposal_result, Bytes("UNKNOWN")),
         If(Gtxn[1].application_args[1]==Bytes("funding"))
         .Then(
-            Seq( 
+            Seq([ 
                 # TODO: Check maybe value
-                store_balance_reg_treasury(Txn.applications[1]),
+                store_balance_reg_treasury(Txn.accounts[2]),
                 max_funding_amt_algos.store(Div(balance_reg_treasury.load(),Int(5))),
                 store_balance_dao_treasury(Global.current_application_address()),
                 max_funding_amt_ans.store(Div(balance_dao_treasury.load(),Int(5))),
@@ -272,198 +222,177 @@ def approval_program(ARG_GOV_TOKEN):
                         Btoi(Gtxn[1].application_args[4])<=max_funding_amt_algos.load()
                     )
                 ),
-                App.globalPut(proposal_funding_amt_algo, Btoi(Gtxn[1].application_args[4])),
+                App.globalPut(bytes_proposal_funding_amt_algo, Btoi(Gtxn[1].application_args[4])),
                 Assert(
                     And(
                         Btoi(Gtxn[1].application_args[5])>=Int(0),
                         Btoi(Gtxn[1].application_args[5])<=max_funding_amt_ans.load()
                     )
                 ),
-                App.globalPut(proposal_funding_amt_ans, Gtxn[1].application_args[5])
-            ),
+                App.globalPut(bytes_reg_app_id_to_update,Txn.applications[1]),
+                App.globalPut(bytes_proposal_funding_amt_ans, Btoi(Gtxn[1].application_args[5])),
+                App.globalPut(bytes_funding_recipient, Gtxn[1].accounts[1])
+        ])
         ).ElseIf(Gtxn[1].application_args[1]==Bytes("updatereg"))
-        .Then( App.globalPut(reg_app_id_to_update, Btoi(Gtxn[1].application_args[4]))
+        .Then(
+            Seq( 
+                # TODO: Confirm the app_id is valid within reason
+                App.globalPut(bytes_reg_app_id_to_update, Btoi(Gtxn[1].application_args[4])),
+                App.globalPut(bytes_reg_app_progrm_hash, Sha512_256(Txn.application_args[5])),
+                App.globalPut(bytes_reg_clear_progrm_hash, Sha512_256(Txn.application_args[6]))
+            )
         ),
         Return(Int(1))
     ])
 
-    # sender.deposit
-    sender_deposit = App.localGet(Int(0), Bytes("deposit"))
+    bytes_yes = Bytes("yes")
+    bytes_no = Bytes("no")
+    bytes_abstain = Bytes("abstain")
+    bytes_hasvoted = Bytes("has_voted")
+    bytes_voteresponse = Bytes("vote_response")
 
-    # p_<proposal> is a concatenation of p_ with the proposal address to avoid some weird attacks.
-    byte_p_proposal = Concat(Bytes("p_"), Txn.accounts[1])
-    p_proposal = App.localGetEx(Int(0), Int(0), byte_p_proposal)  # value = proposal.id when a user voted or 0
-    yes = Bytes("yes")
-    no = Bytes("no")
-    abstain = Bytes("abstain")
-    '''
-    # Register user votes in proposal_lsig by saving Sender.p_<proposal>.
-    # * External Accounts: `proposal` : lsig account address with the proposal record (provided as the first external account).
-    # * Call arguments: `vote` (bytes): { abstain, yes, no}
-    register_vote = Seq([
-        p_proposal,
+    on_register = Seq([
+        App.localPut(Int(0), bytes_proposal_id, Int(0)),
+        App.localPut(Int(0), bytes_voteresponse, Bytes("UNKNOWN")),
+        App.localPut(Int(0), bytes_hasvoted, Bytes("NO")),
+        Return(Int(1))
+    ])
+
+
+    # Register vote:
+    #   apps-args: ["vote", <yes/no/abstain>]
+    #   foreign-assets: [<gov_token_asa_id>]
+    vote = Seq([
+        store_voters_token_balance(Txn.sender(),App.globalGet(govtoken_asa_id)),
+        get_users_last_proposal(),
         Assert(
             And(
-                Global.group_size() == Int(1),
+                App.optedIn(Txn.sender(),App.id()),
                 # voting_start <= now <= voting_end
-                voting_start <= Global.latest_timestamp(),
-                Global.latest_timestamp() <= voting_end,
+                App.globalGet(bytes_voting_start) <= Global.latest_timestamp(),
+                Global.latest_timestamp() <= App.globalGet(bytes_voting_end),
+                Txn.assets[0]==App.globalGet(govtoken_asa_id),
+                acct_balance_asa.load()>=Int(0),
                 # Sender.deposit >= 0 (i.e user "deposited" his votes using deposit_vote_token)
-                App.localGet(Int(0), Bytes("deposit")) > Int(0)
+                Or(
+                    users_last_proposal.load() == Int(0),
+                    users_last_proposal.load() != proposal_id_global
+                )
             )
         ),
-        If(
-            p_proposal.hasValue() == Int(0),
-            # If Sender.p_<proposal> is not set then set p_<proposal> := proposal.id
-            App.localPut(Int(0), byte_p_proposal, proposal_id),
-            # if Sender.p_<proposal> != proposal.id then overwrite by setting the new proposal.id, fail otherwise
-            If(p_proposal.value() != proposal_id,
-                App.localPut(Int(0), byte_p_proposal, proposal_id),
-                Err()),  # double vote
+        If(Txn.application_args[1]==bytes_yes)
+        .Then(
+            App.globalPut(bytes_votecount_yes, Add(App.globalGet(bytes_votecount_yes),Int(1)))
+        ).ElseIf(Txn.application_args[1]==bytes_no)
+        .Then(
+            App.globalPut(bytes_votecount_no, Add(App.globalGet(bytes_votecount_no),Int(1)))
+        ).ElseIf(Txn.application_args[1]==bytes_abstain)
+        .Then(
+            App.globalPut(bytes_votecount_abstain, Add(App.globalGet(bytes_votecount_abstain),Int(1)))
+        ).Else(
+            Err()
         ),
-        # record vote in proposal_lsig local state (proposal.<counter> += Sender.deposit)
-        Cond(
-            [Gtxn[0].application_args[1] == yes, App.localPut(Int(1), yes, App.localGet(Int(1), yes) + sender_deposit)],
-            [Gtxn[0].application_args[1] == no, App.localPut(Int(1), no, App.localGet(Int(1), no) + sender_deposit)],
-            [Gtxn[0].application_args[1] == abstain, App.localPut(Int(1), abstain, App.localGet(Int(1), abstain) + sender_deposit)]
-        ),
-        # Update Sender.deposit_lock := max(Sender.deposit_lock, proposal.voting_end)
-        If(
-            App.localGet(Int(0), Bytes("deposit_lock")) <= voting_end,
-            App.localPut(Int(0), Bytes("deposit_lock"), voting_end)
-        ),
+        App.globalPut(bytes_total_coins_voted, Add(App.globalGet(bytes_total_coins_voted), Add(acct_balance_asa.load(), Int(1)))),
         Return(Int(1))
     ])
 
-    # Clears Sender local state by removing a record of vote cast from a not active proposal. Args:
-    # * proposal : lsig account address with the proposal record (provided as the first external account).
-    clear_vote_record = Seq([
-        p_proposal,
-        scratch_proposal_active(Int(1)),
-        Assert(Global.group_size() == Int(1)),
-        # fail if proposal is active (can’t remove proposal record of an active proposal)
-        If(
-            # NOTE: here we're only moving forward if "p_propsal is set" (i.e p_proposal.hasValue() == Int(1)),
-            # otherwise we don't. Because if we don't do it this way, and value does not exist, then p_proposal.value()
-            # will return Int(0) and proposal_id will return Bytes. This will throw a pyTEAL error.
-            p_proposal.hasValue() == Int(1),
-            If(
-                And(
-                    p_proposal.value() == proposal_id,
-                    # NOTE: 1 means proposal is still in voting.
-                    scratchvar_proposal_active.load() == Int(1)
-                ) == Int(1),
-                Err()
-            )
-        ),
-        # remove record (Sender.p_<proposal>)
-        App.localDel(Int(0), byte_p_proposal),
-        Return(Int(1))
+    return_deposit = Seq([
+        InnerTxnBuilder.Begin(),
+        InnerTxnBuilder.SetFields({
+            TxnField.type_enum: TxnType.AssetTransfer,
+            TxnField.asset_receiver: App.globalGet(bytes_proposal_initiator),
+            TxnField.asset_amount: App.globalGet(Bytes("deposit")),
+            TxnField.xfer_asset: Txn.assets[0]
+        }),
+        InnerTxnBuilder.Submit()
     ])
 
-    # Executes a proposal (note: anyone can execute a proposal). Args:
-    # * proposal : lsig account address with the proposal record (provided as the first external account)
-    execute = Seq([
-        compute_result(Int(1)), # save result in scratch
-        # Assert that the proposal.result() == 1 and proposal.executed == 0
-        Assert(
-            And(scratchvar_result.load() == Int(1), executed == Int(0))
-        ),
-        Cond(
-            [
-                # Int(1) == ALGO transfer
-                proposal_type == Int(1),
-                Assert(
-                    And(
-                        Global.group_size() == Int(2),
-                        Gtxn[1].type_enum() == TxnType.Payment,
-                        Gtxn[1].sender() == proposal_from,
-                        Gtxn[1].receiver() == recipient,
-                        Gtxn[1].amount() == amount,
-                    )
-                )
-            ],
-            [
-                # Int(2) == ASA transfer
-                proposal_type == Int(2),
-                Assert(
-                    And(
-                        Global.group_size() == Int(2),
-                        Gtxn[1].type_enum() == TxnType.AssetTransfer,
-                        Gtxn[1].asset_sender() == proposal_from,
-                        Gtxn[1].asset_receiver() == recipient,
-                        Gtxn[1].asset_amount() == amount,
-                        Gtxn[1].xfer_asset() == asa_id,
-                    )
-                )
-            ],
-            [
-                # Int(3) == Message (no extra transaction)
-                proposal_type == Int(3),
-                Assert(Global.group_size() == Int(1))
-            ]
-        ),
-        # set proposal.executed := 1
-        App.localPut(Int(1), Bytes("executed"), Int(1)),
-        Return(Int(1))
+    scratchvar_prpsl_funding_amt = ScratchVar(TealType.bytes)
+
+    @Subroutine(TealType.none)
+    def get_prpsl_fund_amt():
+        return Seq([
+            scratchvar_prpsl_funding_amt.store(Itob(App.globalGet(bytes_proposal_funding_amt_algo)))
+        ])
+
+    withdraw_funds_from_name_registry = Seq([
+        #TODO: Assert(Txn.applications[1]==App.globalGet(bytes_reg_app_id_to_update)),
+        get_prpsl_fund_amt(),
+        InnerTxnBuilder.Begin(),
+        InnerTxnBuilder.SetFields({
+            TxnField.type_enum: TxnType.ApplicationCall,
+            TxnField.application_id: Txn.applications[1],
+            TxnField.accounts: [App.globalGet(bytes_funding_recipient)],
+            TxnField.on_completion: OnComplete.NoOp,
+            TxnField.application_args: [ Bytes("withdraw_funds"), scratchvar_prpsl_funding_amt.load()]
+        }),
+        InnerTxnBuilder.Submit()
     ])
 
-    # load proposal.id
-    proposal_id = App.localGetEx(Int(0), Int(0), Bytes("id"))
 
-    # Clears proposal record and returns back the deposit. Arguments:
-    # NOTE: proposalLsig is Txn.sender
-    clear_proposal = Seq([
-        compute_result(Int(0)), # int(0) as proposal_lsig is txn.sender()
-        proposal_id,
-        # assert that there is a recorded proposal
-        Assert(proposal_id.hasValue() == Int(1)),
+    update_registry_approval_program = Seq([
+        #TODO: make these assertions work
+        #Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Txn.application_args[1])),
+        #Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Txn.application_args[2])),
+        InnerTxnBuilder.Begin(),
+        InnerTxnBuilder.SetFields({
+            TxnField.type_enum: TxnType.ApplicationCall,
+            TxnField.application_id: Txn.applications[1],
+            TxnField.on_completion: OnComplete.UpdateApplication,
+            TxnField.approval_program: Txn.application_args[1],
+            TxnField.clear_state_program: Txn.application_args[2]
+        }),
+        InnerTxnBuilder.Submit()
+    ])
+
+
+    withdraw_funds_from_dao_treasury = Seq([
+        InnerTxnBuilder.Begin(),
+        InnerTxnBuilder.SetFields({
+            TxnField.type_enum: TxnType.AssetTransfer,
+            TxnField.asset_receiver: App.globalGet(bytes_proposal_initiator),
+            TxnField.asset_amount: App.globalGet(bytes_proposal_funding_amt_ans),
+            TxnField.xfer_asset: Txn.assets[0]
+        }),
+        InnerTxnBuilder.Submit()
+    ])
+
+    @Subroutine(TealType.uint64)
+    def DidVotePass():
+        return And(
+            App.globalGet(bytes_votecount_yes)>App.globalGet(bytes_votecount_no),
+            App.globalGet(bytes_votecount_yes)>App.globalGet(bytes_votecount_abstain)
+        )
+
+    declare_result = Seq([
         Assert(
             And(
-                # Assert amount of withdrawal is proposal.deposit & receiver is sender
-                Global.group_size() == Int(2),
-                Gtxn[1].asset_amount() == App.globalGet(Bytes("deposit")),
-                Gtxn[0].sender() == Gtxn[1].asset_receiver(),
-                # fees must be paid by tx0(proposer) and not the deposit_lsig
-                Gtxn[1].fee() == Int(0),
-
-                # assert that the voting is not active
-                Or(
-                    # it’s past execution: proposal.executed == 1  || proposal.execute_before < now
-                    Or(
-                        App.localGet(Int(0), Bytes("executed")) == Int(1),
-                        App.localGet(Int(0), Bytes("execute_before")) < Global.latest_timestamp()
-                    ) == Int(1),
-                    # OR voting failed result() != 1 && proposal.voting_end < now.
-                    And(
-                        scratchvar_result.load() != Int(1),
-                        App.localGet(Int(0), Bytes("voting_end")) < Global.latest_timestamp()
-                    ) == Int(1)
-                )
+                Global.latest_timestamp()>=App.globalGet(bytes_voting_end),
+                App.globalGet(bytes_proposal_status)==Bytes("active"),
+                App.globalGet(bytes_total_coins_voted) >= App.globalGet(Bytes("min_support")),
+                Txn.assets[0] == App.globalGet(govtoken_asa_id)
+                # TODO: Add any more checks necessary here
             )
         ),
-        # clear proposal record (sender == proposer_lsig)
-        App.localDel(Int(0), Bytes("name")),
-        App.localDel(Int(0), Bytes("url")),
-        App.localDel(Int(0), Bytes("url_hash")),
-        App.localDel(Int(0), Bytes("hash_algo")),
-        App.localDel(Int(0), Bytes("voting_start")),
-        App.localDel(Int(0), Bytes("voting_end")),
-        App.localDel(Int(0), Bytes("execute_before")),
-        App.localDel(Int(0), Bytes("type")),
-        App.localDel(Int(0), Bytes("from")),
-        App.localDel(Int(0), Bytes("recipient")),
-        App.localDel(Int(0), Bytes("asa_id")),
-        App.localDel(Int(0), Bytes("amount")),
-        App.localDel(Int(0), Bytes("msg")),
-        App.localDel(Int(0), Bytes("id")),
-        App.localDel(Int(0), Bytes("executed")),
-        App.localDel(Int(0), Bytes("yes")),
-        App.localDel(Int(0), Bytes("no")),
-        App.localDel(Int(0), Bytes("abstain")),
+        If(DidVotePass()).Then(Seq([
+            App.globalPut(bytes_proposal_result, Bytes("PASSED")),
+            If(App.globalGet(bytes_proposal_type)==Bytes("funding"))
+            .Then(Seq([
+                    withdraw_funds_from_name_registry,
+                    withdraw_funds_from_dao_treasury
+            ])
+            ).ElseIf(App.globalGet(bytes_proposal_type)==Bytes("updatereg"))
+            .Then(update_registry_approval_program)
+            ])
+        ).Else(Seq([
+            App.globalPut(bytes_proposal_result, Bytes("REJECTED")),
+            
+        ])
+        ),
+        return_deposit,
+        ResetProposalParams(),
         Return(Int(1))
     ])
-    '''
 
     handle_closeout_or_optin = Seq([
         Assert(Global.group_size() == Int(1)),
@@ -485,31 +414,14 @@ def approval_program(ARG_GOV_TOKEN):
         [
             Or(
                 Txn.on_completion() == OnComplete.CloseOut,
-                Txn.on_completion() == OnComplete.OptIn
             ),
             handle_closeout_or_optin
         ],
+        [Txn.on_completion() == OnComplete.OptIn, on_register],
         [Txn.application_args[0] == Bytes("opt_in_to_gov_token"), opt_in_to_gov_token],
-        # Verifies add accounts call, jumps to add_deposit_accounts branch.
-        #[Txn.application_args[0] == Bytes("add_deposit_accounts"), add_deposit_accounts],
-        # Verifies add proposal call, jumps to add_proposal branch.
-        [Txn.application_args[0] == Bytes("add_proposal"), add_proposal]
-        # Verifies deposit_vote_token call, jumps to deposit_vote_token branch.
-        #[Txn.application_args[0] == Bytes("deposit_vote_token"), deposit_vote_token],
-        ## Verifies register_vote call, jumps to register_vote branch.
-        #[Txn.application_args[0] == Bytes("register_vote"), register_vote],
-        ## Verifies execute call, jumps to execute branch.
-        #[Txn.application_args[0] == Bytes("execute"), execute],
-        ## Verifies withdraw_vote_deposit call, jumps to withdraw_vote_deposit branch.
-        #[Txn.application_args[0] == Bytes("withdraw_vote_deposit"), withdraw_vote_deposit],
-        ## Verifies clear_vote_record call, jumps to clear_vote_record branch.
-        #[Txn.application_args[0] == Bytes("clear_vote_record"), clear_vote_record],
-        ## Verifies clear_proposal call, jumps to clear_proposal branch.
-        #[Txn.application_args[0] == Bytes("clear_proposal"), clear_proposal]
+        [Txn.application_args[0] == Bytes("add_proposal"), add_proposal],
+        [Txn.application_args[0] == Bytes("register_vote"), vote],
+        [Txn.application_args[0] == Bytes("declare_result"), declare_result],
     )
 
     return program
-
-with open('dao_app_approval.teal', 'w') as f:
-    compiled = compileTeal(approval_program(85778236), Mode.Application, version=6)
-    f.write(compiled)

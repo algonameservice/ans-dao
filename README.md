@@ -60,3 +60,14 @@ Voting power is TBD and is currently defined by ASA holding (1 ASA = 1 voting po
 	* app_args (string list): the application arguments corresponding to the approval program and registry's update method
 
 	This proposal will prepare and execute InnerTransaction that calls the registry smart contract's update method.
+
+## Run tests
+Install required python packages
+```
+pip3 install -r requirements.txt
+```
+Run tests
+```
+cd my-tests
+python3 TestANSDAO.py
+```

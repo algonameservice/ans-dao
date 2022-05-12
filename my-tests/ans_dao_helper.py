@@ -20,15 +20,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 '''
 
-from http.client import GONE
 from multiprocessing.connection import answer_challenge
-from algosdk import mnemonic, account, encoding
+from algosdk import mnemonic, account, encoding, constants
 from algosdk.future import transaction
 from algosdk.future.transaction import LogicSig, LogicSigTransaction, LogicSigAccount
 from algosdk.v2client import algod, indexer
-from algosdk import logic
-import json
+from algosdk import logic, util
+import json, random
+from numpy import int64
 from pyteal import *
+import ans_helper as anshelper
 
 import sys
 #sys.path.append('../')
@@ -86,7 +87,7 @@ def GetFundingAccount(algod_client):
 	#print("Sender address: {}".format(sender))
 
 	account_info = algod_client.account_info(sender)
-	#print("Account balance: {} microAlgos".format(account_info.get('amount')))
+	print("Funding account balance: {} microAlgos".format(account_info.get('amount')))
 
 	return sender, passphrase
 
@@ -106,7 +107,8 @@ def FundNewAccount(algod_client, receiver, amount, funding_acct_mnemonic):
 
 	#submit transaction
 	txid = algod_client.send_transaction(signed_txn)
-	print("Successfully sent transaction with txID: {}".format(txid))
+	#print("Successfully sent transaction with txID: {}".format(txid))
+	print("Successfully sent transaction")
 
 	# wait for confirmation 
 	try:
@@ -240,11 +242,17 @@ def print_created_asset(algodclient, account, assetid):
 			print(json.dumps(my_account_info['params'], indent=4))
 			break
 
-def DeployANSDAO(algod_client, contract_owner_mnemonic, gov_asaid):
+def DeployANSDAO(algod_client: algod,
+	min_support: int64,
+	min_duration: int64,
+	contract_owner_mnemonic: str, 
+	gov_asaid: int64
+	):
+
 	pk_owner=mnemonic.to_private_key(contract_owner_mnemonic)
 	acct_owner=account.address_from_private_key(pk_owner)
 
-    # Setup Schema
+	# Setup Schema
 	local_ints = 4 
 	local_bytes = 12 
 	global_ints = 32 
@@ -253,10 +261,10 @@ def DeployANSDAO(algod_client, contract_owner_mnemonic, gov_asaid):
 	local_schema = transaction.StateSchema(local_ints, local_bytes)
 	
 	on_complete = transaction.OnComplete.NoOpOC.real
-	min_deposit = 200000
-	min_support = 200
-	min_duration = 604800
-	max_duration = 864000
+	min_deposit = 20000000
+	#min_support = 20000#00
+	#min_duration = 2 # days
+	max_duration = 10 # days
 	appargs = [
 		min_deposit.to_bytes(8, 'big'), # min deposit
 		min_support.to_bytes(8, 'big'), # min support
@@ -265,11 +273,14 @@ def DeployANSDAO(algod_client, contract_owner_mnemonic, gov_asaid):
 		"https://ansdao.org".encode('utf-8') #url
 	]
 	
-	compileTeal(approval_program(gov_asaid), Mode.Application, version=6)
-	compileTeal(clear_state_program(), Mode.Application,version=6)
+	compiled_approval_program = compileTeal(approval_program(gov_asaid.to_bytes(8,'big')), Mode.Application, version=6)
+	compiled_clear_state_program = compileTeal(clear_state_program(), Mode.Application,version=6)
 	
-	ans_approval_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_approval.teal'))
-	ans_clear_state_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_clear_state.teal'))
+	#ans_approval_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_approval.teal'))
+	#ans_clear_state_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_clear_state.teal'))
+
+	ans_approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
+	ans_clear_state_program = compile_program(algod_client,str.encode(compiled_clear_state_program))
 	
 	txn = transaction.ApplicationCreateTxn(
 		sender=acct_owner,
@@ -287,8 +298,6 @@ def DeployANSDAO(algod_client, contract_owner_mnemonic, gov_asaid):
 	signed_txn = txn.sign(pk_owner)
 	tx_id = signed_txn.transaction.get_txid()
 	
-	print(tx_id)
-	
 	# send transaction
 	algod_client.send_transactions([signed_txn])
 
@@ -299,7 +308,6 @@ def DeployANSDAO(algod_client, contract_owner_mnemonic, gov_asaid):
 		# display results
 		transaction_response = algod_client.pending_transaction_info(tx_id)
 		app_id = transaction_response['application-index']
-		print("Deployed new ANS DAO smart contract with App-id: ",app_id)
 	
 		return app_id
 	except Exception as err:
@@ -326,7 +334,14 @@ def DAOOptInToGOVASA(algod_client, pk_sender, gov_asaid, dao_app_id):
 	except Exception as err:
 		print(err)
 
-def DAOAddProposalSocial(algod_client, pk_sender, gov_asaid, deposit_amt,  dao_app_id):
+def DAOAddProposalSocial(
+	algod_client: algod,
+	pk_sender: str,
+	duration: int64,
+	gov_asaid: int64,
+	deposit_amt: int64,
+	dao_app_id: int64
+	):
 
 	Grp_txns_unsign = []
 
@@ -335,27 +350,24 @@ def DAOAddProposalSocial(algod_client, pk_sender, gov_asaid, deposit_amt,  dao_a
 		sp=algod_client.suggested_params(),
 		amt=deposit_amt,
 		receiver=logic.get_application_address(dao_app_id),
-		index=gov_asaid,
-		close_assets_to=None,
-		rekey_to=None
+		index=gov_asaid
+		#rekey_to=constants.ZERO_ADDRESS,
+		#close_assets_to=constants.ZERO_ADDRESS
 	)
 	
 	Grp_txns_unsign.append(deposit_txn)
-
-	max_duration = 70
 
 	txn_add_proposal = transaction.ApplicationNoOpTxn(
 		sender=account.address_from_private_key(pk_sender),
 		sp=algod_client.suggested_params(),
 		index=dao_app_id,
-		foreign_apps=[dao_app_id],
 		app_args=[
 			"add_proposal".encode("utf-8"),
 			"social".encode("utf-8"),
-			max_duration.to_bytes(8, 'big'),
+			duration.to_bytes(8, 'big'),
 			"https://github.com/someproposal"
-		],
-		rekey_to=None
+		]
+		#rekey_to=constants.ZERO_ADDRESS
 	)
 
 	
@@ -367,7 +379,62 @@ def DAOAddProposalSocial(algod_client, pk_sender, gov_asaid, deposit_amt,  dao_a
 	for i in range(2):
 		Grp_txns_signed.append(Grp_txns_unsign[i].sign(pk_sender))
 	
+	try:
+		txn_id = Grp_txns_signed[1].transaction.get_txid()
+		algod_client.send_transactions(Grp_txns_signed)
+		wait_for_confirmation(algod_client, txn_id)
+	except Exception as err:
+		print(err)
+
+def DAOAddProposalFunding(
+	algod_client: algod,
+	pk_sender: str,
+	duration: int64,
+	gov_asaid: int64,
+	deposit_amt: int64,
+	dao_app_id: int64,
+	reg_app_id: int64,
+	amt_algos: int64,
+	amt_ans: int64,
+	addr_recipient: int64
+):
+
+	Grp_txns_unsign = []
+
+	deposit_txn = transaction.AssetTransferTxn(
+		sender=account.address_from_private_key(pk_sender),
+		sp=algod_client.suggested_params(),
+		amt=deposit_amt,
+		receiver=logic.get_application_address(dao_app_id),
+		index=gov_asaid,
+	)
 	
+	Grp_txns_unsign.append(deposit_txn)
+
+	txn_add_proposal = transaction.ApplicationNoOpTxn(
+		sender=account.address_from_private_key(pk_sender),
+		sp=algod_client.suggested_params(),
+		index=dao_app_id,
+		foreign_apps=[reg_app_id],
+		accounts=[addr_recipient, logic.get_application_address(reg_app_id)],
+		app_args=[
+			"add_proposal".encode("utf-8"),
+			"funding".encode("utf-8"),
+			duration.to_bytes(8, 'big'),
+			"https://github.com/someproposal".encode("utf-8"),
+			amt_algos.to_bytes(8, 'big'),
+			amt_ans.to_bytes(8, 'big')
+		]
+		#rekey_to=constants.ZERO_ADDRESS
+	)
+	
+	Grp_txns_unsign.append(txn_add_proposal)
+
+	Grp_txns_packed_unsigned = transaction.assign_group_id(Grp_txns_unsign)
+	Grp_txns_signed = []
+	
+	for i in range(2):
+		Grp_txns_signed.append(Grp_txns_unsign[i].sign(pk_sender))
 	
 	try:
 		txn_id = Grp_txns_signed[1].transaction.get_txid()
@@ -375,10 +442,146 @@ def DAOAddProposalSocial(algod_client, pk_sender, gov_asaid, deposit_amt,  dao_a
 		wait_for_confirmation(algod_client, txn_id)
 	except Exception as err:
 		print(err)
+
+def DAOAddProposalUpdateReg(
+	algod_client: algod,
+	pk_sender: str,
+	duration: int64,
+	gov_asaid: int64,
+	deposit_amt: int64,
+	dao_app_id: int64,
+	reg_app_id: int64,
+	addr_recipient: int64
+):
+
+	Grp_txns_unsign = []
+
+	deposit_txn = transaction.AssetTransferTxn(
+		sender=account.address_from_private_key(pk_sender),
+		sp=algod_client.suggested_params(),
+		amt=deposit_amt,
+		receiver=logic.get_application_address(dao_app_id),
+		index=gov_asaid,
+	)
 	
+	Grp_txns_unsign.append(deposit_txn)
+	
+	compiled_approval_program = anshelper.compileTeal(anshelper.approval_program(logic.get_application_address(dao_app_id)), Mode.Application,version=6)
+	compiled_clear_state_program = anshelper.compileTeal(anshelper.clear_state_program(), Mode.Application,version=6)
+
+	ans_app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))
+	ans_clear_program = anshelper.compile_program(algod_client, str.encode(compiled_clear_state_program))
+
+	txn_add_proposal = transaction.ApplicationNoOpTxn(
+		sender=account.address_from_private_key(pk_sender),
+		sp=algod_client.suggested_params(),
+		index=dao_app_id,
+		foreign_apps=[reg_app_id],
+		accounts=[addr_recipient, logic.get_application_address(reg_app_id)],
+		app_args=[
+			"add_proposal".encode("utf-8"),
+			"updatereg".encode("utf-8"),
+			duration.to_bytes(8, 'big'),
+			"https://github.com/someproposal".encode("utf-8"),
+			reg_app_id.to_bytes(8, 'big'),
+			ans_app_program,
+			ans_clear_program
+		],
+		#rekey_to=constants.ZERO_ADDRESS
+	)
+	
+	Grp_txns_unsign.append(txn_add_proposal)
+
+	transaction.assign_group_id(Grp_txns_unsign)
+	Grp_txns_signed = []
+	
+	for i in range(2):
+		Grp_txns_signed.append(Grp_txns_unsign[i].sign(pk_sender))
+	
+	try:
+		txn_id = Grp_txns_signed[1].transaction.get_txid()
+		algod_client.send_transactions(Grp_txns_signed)
+		wait_for_confirmation(algod_client, txn_id)
+	except Exception as err:
+		print(err)
+
+def DAORegisterVote(
+	algod_client: algod,
+	choice: str,
+	pvk_sender: str ,
+	gov_asaid: int64, 
+	dao_app_id: int64):
+
+	txn_dao_opt_in = transaction.ApplicationOptInTxn(
+		sender=account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		index=dao_app_id
+	)
+
+	try:
+		txn_id = txn_dao_opt_in.get_txid()
+		algod_client.send_transaction(txn_dao_opt_in.sign(pvk_sender))
+		wait_for_confirmation(algod_client, txn_id)
+	except Exception as err:
+		print(err)
+
+	txn_register_vote = transaction.ApplicationNoOpTxn(
+		sender=account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		index=dao_app_id,
+		app_args=[
+			"register_vote".encode("utf-8"),
+			choice.encode("utf-8"),
+		],
+		foreign_assets=[gov_asaid],
+		rekey_to=None
+	)
+
+	try:
+		txn_id = txn_register_vote.get_txid()
+		algod_client.send_transaction(txn_register_vote.sign(pvk_sender))
+		wait_for_confirmation(algod_client, txn_id)
+	except Exception as err:
+		print(err)
+
+def DAODeclareResult(
+	algod_client: algod,
+	pvk_sender: str,
+	dao_app_id: int64,
+	gov_asa_id: int64,
+	reg_app_id: int64
+	):
+
+	compiled_approval_program = anshelper.compileTeal(anshelper.approval_program(logic.get_application_address(dao_app_id)), Mode.Application,version=6)
+	compiled_clear_state_program = anshelper.compileTeal(anshelper.clear_state_program(), Mode.Application,version=6)
+
+	ans_app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))
+	ans_clear_program = anshelper.compile_program(algod_client, str.encode(compiled_clear_state_program))
+
+	txn_declare_result = transaction.ApplicationNoOpTxn(
+		sender=account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		index=dao_app_id,
+		foreign_apps= [reg_app_id],
+		app_args=[
+			"declare_result".encode("utf-8"),
+			ans_app_program,
+			ans_clear_program
+		],
+		foreign_assets=[gov_asa_id]
+	)
+
+	try:
+		txnid = txn_declare_result.get_txid()
+		algod_client.send_transaction(txn_declare_result.sign(pvk_sender))
+		wait_for_confirmation(algod_client, txnid)
+	except Exception as err:
+		print(err)
+
+
 
 # helper function to compile program source
-def compile_program(algod_client, source_code) :
+def compile_program(algod_client: algod, source_code: str) :
 	compile_response = algod_client.compile(source_code.decode('utf-8'))
 	return base64.b64decode(compile_response['result'])
 
@@ -396,39 +599,286 @@ def wait_for_confirmation(algod_client,txid) :
 		last_round += 1
 		algod_client.status_after_block(last_round)
 		txinfo = algod_client.pending_transaction_info(txid)
-	print("Transaction {} confirmed in round {}.".format(txid, txinfo.get('confirmed-round')))
+	#print("Transaction {} confirmed in round {}.".format(txid, txinfo.get('confirmed-round')))
+	print("Txn confirmed in round {}".format(txinfo.get('confirmed-round')))
 	return txinfo
 
-def main():
-	my_algod_client = SetupClient("purestake")
-	funding_addr, funding_acct_mnemonic = GetFundingAccount(my_algod_client)
 
-	'''
-	asaid = DeployANSToken(my_algod_client, funding_acct_mnemonic)
+class Env(object):
 
-	FundNewAccount(my_algod_client, new_acct_addr, 1000000,funding_acct_mnemonic)    
+	def __init__(self, algod_client):
+		super().__init__()
 
-	ASAOptIn(my_algod_client, mnemonic.to_private_key(new_acct_mnemonic), asaid)
-
-	TransferASA(my_algod_client,100000,mnemonic.to_private_key(funding_acct_mnemonic),new_acct_addr,asaid)
-	'''
-	GOV_ASA_ID = 85778236
-	DAO_APP_ID=DeployANSDAO(my_algod_client,funding_acct_mnemonic,GOV_ASA_ID)
-	#DAO_APP_ID=86039171
-
-	acct_dao_escrow = logic.get_application_address(DAO_APP_ID)
-	print("DAO Escrow add: "+acct_dao_escrow)
+		self._my_algod_client = algod_client
+		self._funding_addr, self._funding_acct_mnemonic = GetFundingAccount(self.my_algod_client)
 	
-	FundNewAccount(my_algod_client, acct_dao_escrow, 1000000, funding_acct_mnemonic)
+		print("Deploying DAO APP")
+		self._GOV_ASA_ID = 85778236
+		self._DAO_APP_ID=DeployANSDAO(self.my_algod_client, 200000, 1, self._funding_acct_mnemonic,self._GOV_ASA_ID)
+		print("Deployed ANS DAO APP with APP-id "+str(self._DAO_APP_ID))
+	
+		acct_dao_escrow = logic.get_application_address(self._DAO_APP_ID)
+		print("DAO Escrow add: "+acct_dao_escrow)
+		print("--------------------------------------------------------------------")
+		
+		print("Funding DAO APP's escrow account: ")
+		FundNewAccount(self.my_algod_client, acct_dao_escrow, 1000000, self._funding_acct_mnemonic)
+		print("Successfully funded DAO APP's escrow account with 1 ALGO")
+		print("--------------------------------------------------------------------")
+	
+		print("Attemping DAO APP to opt in to GOV ASA")
+		DAOOptInToGOVASA(self.my_algod_client, mnemonic.to_private_key(self._funding_acct_mnemonic), self._GOV_ASA_ID, self._DAO_APP_ID)
+		print("Successfully opted DAO APP in to GOV ASA")
+		print("--------------------------------------------------------------------")
+	
+	@property
+	def my_algod_client(self):
+		return self._my_algod_client
 
-	DAOOptInToGOVASA(my_algod_client, mnemonic.to_private_key(funding_acct_mnemonic), GOV_ASA_ID, DAO_APP_ID)
+	@property
+	def gov_asa_id(self):
+		return self._GOV_ASA_ID
+	
+	@property
+	def funding_addr(self):
+		return self._funding_addr
+	
+	@property
+	def funding_acct_mnemonic(self):
+		return self._funding_acct_mnemonic
+
+	@property
+	def dao_app_id(self):
+		return self._DAO_APP_ID
+
+def AddRandomVotesFromRandomAccounts(env: Env, num: int64):
+
+	print("Generating {} random accounts".format(num))
+
+	generated_accts = []
+	choices_vote = ["yes", "no", "abstain"]
+	privkey_funding_acc = mnemonic.to_private_key(env.funding_acct_mnemonic)
+
+	for i in range(num):
+		addr_new_acc, mnem_new_acc = GenerateAccount()
+		privkey_new_acc = mnemonic.to_private_key(mnem_new_acc)
+		FundNewAccount(env.my_algod_client, addr_new_acc, 1030000, env.funding_acct_mnemonic)
+		ASAOptIn(env.my_algod_client, privkey_new_acc, env.gov_asa_id)
+		TransferASA(env.my_algod_client, 200000, privkey_funding_acc, addr_new_acc, env.gov_asa_id)
+		#DAORegisterVote(env.my_algod_client, random.choice(choices_vote), privkey_new_acc, env.gov_asa_id, env.dao_app_id)
+		DAORegisterVote(env.my_algod_client, "yes", privkey_new_acc, env.gov_asa_id, env.dao_app_id)
+		generated_accts.append(privkey_new_acc)
+	
+	return generated_accts
+
+def TestSocialProposal(env: Env):
 
 	new_acct_addr, new_acct_mnemonic = GenerateAccount()
-	FundNewAccount(my_algod_client, new_acct_addr, 1000000, funding_acct_mnemonic)
-	ASAOptIn(my_algod_client, mnemonic.to_private_key(new_acct_mnemonic), GOV_ASA_ID)
-	TransferASA(my_algod_client,20001000,mnemonic.to_private_key(funding_acct_mnemonic),new_acct_addr,GOV_ASA_ID)
+	pvk_funding_acct = mnemonic.to_private_key(env.funding_acct_mnemonic)
+	pvk_new_acct = mnemonic.to_private_key(new_acct_mnemonic)
 
-	DAOAddProposalSocial(my_algod_client,mnemonic.to_private_key(funding_acct_mnemonic),GOV_ASA_ID, 200000, DAO_APP_ID)
+	print("Generated new account: "+new_acct_addr)
+	FundNewAccount(env.my_algod_client, new_acct_addr, 2000000, env.funding_acct_mnemonic)
+	print("Funded new account {} with 1 ALGO and new balance is: {:,} ALGOs".format(new_acct_addr,util.microalgos_to_algos(env.my_algod_client.account_info(new_acct_addr).get('amount'))))
+	
+	print("--------------------------------------------------------------------")
+
+	ASAOptIn(env.my_algod_client, pvk_new_acct, env.gov_asa_id)
+	print("New account opted in to the GOV ASA")
+	print("--------------------------------------------------------------------")
+
+	print("Attempting to transfer 200k ANS to new account")
+	TransferASA(env.my_algod_client,20001000,pvk_funding_acct,new_acct_addr,env.gov_asa_id)
+	print("Funded new account "+new_acct_addr+"with 200k ANS and new balance is: ")
+	print_asset_holding(env.my_algod_client,new_acct_addr, env._GOV_ASA_ID)
+	print("--------------------------------------------------------------------")
+
+	#DAO_APP_ID=86039171
+	print("Attempting to add a social proposal")
+	DAOAddProposalSocial(env.my_algod_client,pvk_new_acct, 1, env.gov_asa_id, 20000000, env.dao_app_id)
+	print_asset_holding(env.my_algod_client, new_acct_addr, env.gov_asa_id)
+	print("Successfully added social proposal")
+	print("--------------------------------------------------------------------")
+
+	print("Funding acct with some more ALGOs to meet raised min balance")
+	print("Attempting to vote on the social proposal")
+	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id)
+	print("Successfully registered vote")
+	print("--------------------------------------------------------------------")
+
+	AddRandomVotesFromRandomAccounts(env, 2)
+	#time.sleep(100)
+
+	print("Declaring Result")
+	DAODeclareResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, 812342)
+	print("Vote Declared successfully")
+	print("--------------------------------------------------------------------")
+
+def TestFundingProposal(env: Env):
+
+	new_acct_addr, new_acct_mnemonic = GenerateAccount()
+	pvk_funding_acct = mnemonic.to_private_key(env.funding_acct_mnemonic)
+	pvk_new_acct = mnemonic.to_private_key(new_acct_mnemonic)
+
+	print("Generated new account: "+new_acct_addr)
+	funding_amt = 2000000
+	FundNewAccount(env.my_algod_client, new_acct_addr, funding_amt, env.funding_acct_mnemonic)
+	print("Funded new account {} with {} ALGO and new balance is: {}".format(
+		new_acct_addr,
+		util.microalgos_to_algos(funding_amt),
+		str(env.my_algod_client.account_info(new_acct_addr).get('amount')))
+	)
+	
+	print("--------------------------------------------------------------------")
+
+	ASAOptIn(env.my_algod_client, pvk_new_acct, env.gov_asa_id)
+	print("New account opted in to the GOV ASA")
+	print("--------------------------------------------------------------------")
+
+	print("Attempting to transfer 200k ANS to new account")
+	TransferASA(env.my_algod_client,20001000,pvk_funding_acct,new_acct_addr,env.gov_asa_id)
+	print("Funded new account "+new_acct_addr+"with 200k ANS and new balance is: ")
+	print_asset_holding(env.my_algod_client,new_acct_addr, env._GOV_ASA_ID)
+	print("--------------------------------------------------------------------")
+
+
+	print("Attempting to Deploy ANS Dot algo registry")
+	dot_algo_reg_app_id = anshelper.DeployDotAlgoReg(
+		ans_dao_env.my_algod_client, 
+		ans_dao_env.funding_acct_mnemonic,
+		logic.get_application_address(env.dao_app_id)
+	)
+	print("Successfully deployed ANS Dot Algo Registry at app-id: {}".format(dot_algo_reg_app_id))
+	print("--------------------------------------------------------------------")
+
+	print("Funding Dot Algo Name registry with ALGOs")
+	funding_amt = 2000000
+	FundNewAccount(env.my_algod_client, logic.get_application_address(dot_algo_reg_app_id), funding_amt, env.funding_acct_mnemonic)
+	print("Funded new account {} with {} ALGO and new balance is: {}".format(
+		new_acct_addr,
+		funding_amt,
+		str(env.my_algod_client.account_info(new_acct_addr).get('amount')))
+	)
+	print("Funding DAO Treasury with ANS")
+	funding_amt = 200000
+	TransferASA(env.my_algod_client,funding_amt,pvk_funding_acct,logic.get_application_address(env.dao_app_id),env.gov_asa_id)
+	print_asset_holding(env.my_algod_client, logic.get_application_address(env.dao_app_id), env.gov_asa_id)
+	print("--------------------------------------------------------------------")
+	#DAO_APP_ID=86039171
+	print("Attempting to add a Funding proposal")
+	DAOAddProposalFunding(
+		env.my_algod_client,
+		pvk_new_acct,
+		1, 
+		env.gov_asa_id,
+		20000000,
+		env.dao_app_id,
+		dot_algo_reg_app_id,
+		100000,
+		100000,
+		new_acct_addr
+	)
+	print_asset_holding(env.my_algod_client, new_acct_addr, env.gov_asa_id)
+	print("Successfully added funding proposal")
+	print("--------------------------------------------------------------------")
+
+	print("Attempting to vote on the funding proposal")
+	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id)
+	print("Successfully registered vote")
+	print("--------------------------------------------------------------------")
+
+	AddRandomVotesFromRandomAccounts(env, 1)
+	#time.sleep(100)
+
+	print("Declaring Result")
+	DAODeclareResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, dot_algo_reg_app_id)
+	print("Vote Declared successfully")
+	print("--------------------------------------------------------------------")
+
+def TestUpdateRegProposal(env: Env):
+
+	new_acct_addr, new_acct_mnemonic = GenerateAccount()
+	pvk_funding_acct = mnemonic.to_private_key(env.funding_acct_mnemonic)
+	pvk_new_acct = mnemonic.to_private_key(new_acct_mnemonic)
+
+	print("Generated new account: "+new_acct_addr)
+	funding_amt = 2000000
+	FundNewAccount(env.my_algod_client, new_acct_addr, funding_amt, env.funding_acct_mnemonic)
+	print("Funded new account {} with {} ALGO and new balance is: {}".format(
+		new_acct_addr,
+		funding_amt,
+		str(env.my_algod_client.account_info(new_acct_addr).get('amount')))
+	)
+	print("--------------------------------------------------------------------")
+	print("\n Attempting to make the smart contract opt-in to GOV ASA")
+	ASAOptIn(env.my_algod_client, pvk_new_acct, env.gov_asa_id)
+	print("New account opted in to the GOV ASA")
+	print("--------------------------------------------------------------------")
+
+	print("Attempting to transfer 200k ANS to new account")
+	TransferASA(env.my_algod_client,20001000,pvk_funding_acct,new_acct_addr,env.gov_asa_id)
+	print("Funded new account "+new_acct_addr+"with 200k ANS and new balance is: ")
+	print_asset_holding(env.my_algod_client,new_acct_addr, env._GOV_ASA_ID)
+	print("--------------------------------------------------------------------")
+
+
+	print("Attempting to Deploy ANS Dot algo registry")
+	dot_algo_reg_app_id = anshelper.DeployDotAlgoReg(
+		ans_dao_env.my_algod_client, 
+		ans_dao_env.funding_acct_mnemonic,
+		logic.get_application_address(env.dao_app_id)
+	)
+	print("Successfully deployed ANS Dot Algo Registry at app-id: {}".format(dot_algo_reg_app_id))
+	print("--------------------------------------------------------------------")
+
+	funding_amt = 2000000
+	print("Funding Dot Algo Name registry with {:,} ALGOs".format(util.microalgos_to_algos(funding_amt)))
+	FundNewAccount(env.my_algod_client, logic.get_application_address(dot_algo_reg_app_id), funding_amt, env.funding_acct_mnemonic)
+	print("Funded new account {} with {} ALGO and new balance is: {}".format(
+		new_acct_addr,
+		funding_amt,
+		str(env.my_algod_client.account_info(new_acct_addr).get('amount')))
+	)
+	print("Funding DAO Treasury with ANS")
+	funding_amt = 200000
+	TransferASA(env.my_algod_client,funding_amt,pvk_funding_acct,logic.get_application_address(env.dao_app_id),env.gov_asa_id)
+	print_asset_holding(env.my_algod_client, logic.get_application_address(env.dao_app_id), env.gov_asa_id)
+	print("--------------------------------------------------------------------")
+	#DAO_APP_ID=86039171
+	print("Attempting to add an Update Registry proposal")
+	DAOAddProposalUpdateReg(
+		env.my_algod_client,
+		pvk_new_acct,
+		1, 
+		env.gov_asa_id,
+		20000000,
+		env.dao_app_id,
+		dot_algo_reg_app_id,
+		new_acct_addr
+	)
+	print_asset_holding(env.my_algod_client, new_acct_addr, env.gov_asa_id)
+	print("Successfully added update registry proposal")
+	print("--------------------------------------------------------------------")
+
+	print("Attempting to vote on the update reg proposal")
+	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id)
+	print("Successfully registered vote")
+	print("--------------------------------------------------------------------")
+
+	AddRandomVotesFromRandomAccounts(env, 1)
+	#time.sleep(100)
+
+	print("Declaring Result")
+	DAODeclareResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, dot_algo_reg_app_id)
+	print("Vote Declared successfully")
+	print("--------------------------------------------------------------------")
+
 
 if __name__ == "__main__":
-	main()
+	ans_dao_env = Env(SetupClient("purestake"))
+
+	TestSocialProposal(ans_dao_env)
+
+	TestFundingProposal(ans_dao_env)	
+
+	TestUpdateRegProposal(ans_dao_env)	

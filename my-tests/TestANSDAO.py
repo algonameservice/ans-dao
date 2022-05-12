@@ -28,7 +28,7 @@ import ans_helper as anshelper
 
 unittest.TestLoader.sortTestMethodsUsing = None
 
-class TestDotAlgoNameRegistry(unittest.TestCase):
+class TestANSDAO(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.algod_client = anshelper.SetupClient("purestake")
