@@ -2,3 +2,4 @@
 *.teal
 *mysecrets.py*
 .vscode/
+COMMENTS.md

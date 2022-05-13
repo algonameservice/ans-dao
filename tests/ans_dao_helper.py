@@ -30,6 +30,7 @@ import json, random
 from numpy import int64
 from pyteal import *
 import ans_helper as anshelper
+import hashlib
 
 import sys
 #sys.path.append('../')
@@ -273,14 +274,20 @@ def DeployANSDAO(algod_client: algod,
 		"https://ansdao.org".encode('utf-8') #url
 	]
 	
-	compiled_approval_program = compileTeal(approval_program(gov_asaid.to_bytes(8,'big')), Mode.Application, version=6)
+	compiled_approval_program = compileTeal(approval_program(gov_asaid), Mode.Application, version=6)
 	compiled_clear_state_program = compileTeal(clear_state_program(), Mode.Application,version=6)
+
+	
 	
 	#ans_approval_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_approval.teal'))
 	#ans_clear_state_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_clear_state.teal'))
 
 	ans_approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
 	ans_clear_state_program = compile_program(algod_client,str.encode(compiled_clear_state_program))
+
+	h = hashlib.new('sha256')
+	h.update(ans_approval_program)
+	print(h.hexdigest())
 	
 	txn = transaction.ApplicationCreateTxn(
 		sender=acct_owner,
@@ -291,7 +298,7 @@ def DeployANSDAO(algod_client: algod,
 		global_schema=global_schema,
 		local_schema=local_schema,
 		app_args=appargs,
-		foreign_assets=[85778236]
+		foreign_assets=[gov_asaid]
 	)
 	
 	# sign transaction
@@ -558,6 +565,7 @@ def DAODeclareResult(
 	ans_app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))
 	ans_clear_program = anshelper.compile_program(algod_client, str.encode(compiled_clear_state_program))
 
+	
 	txn_declare_result = transaction.ApplicationNoOpTxn(
 		sender=account.address_from_private_key(pvk_sender),
 		sp=algod_client.suggested_params(),
@@ -611,9 +619,12 @@ class Env(object):
 
 		self._my_algod_client = algod_client
 		self._funding_addr, self._funding_acct_mnemonic = GetFundingAccount(self.my_algod_client)
+
+		print("Deploying ANS Token")
+		self._GOV_ASA_ID = DeployANSToken(self.my_algod_client, self._funding_acct_mnemonic)
+		print("Deployed ANS Token with Asset-id "+str(self._GOV_ASA_ID))
 	
 		print("Deploying DAO APP")
-		self._GOV_ASA_ID = 85778236
 		self._DAO_APP_ID=DeployANSDAO(self.my_algod_client, 200000, 1, self._funding_acct_mnemonic,self._GOV_ASA_ID)
 		print("Deployed ANS DAO APP with APP-id "+str(self._DAO_APP_ID))
 	
@@ -630,6 +641,7 @@ class Env(object):
 		DAOOptInToGOVASA(self.my_algod_client, mnemonic.to_private_key(self._funding_acct_mnemonic), self._GOV_ASA_ID, self._DAO_APP_ID)
 		print("Successfully opted DAO APP in to GOV ASA")
 		print("--------------------------------------------------------------------")
+		
 	
 	@property
 	def my_algod_client(self):
@@ -877,8 +889,8 @@ def TestUpdateRegProposal(env: Env):
 if __name__ == "__main__":
 	ans_dao_env = Env(SetupClient("purestake"))
 
-	TestSocialProposal(ans_dao_env)
+	#TestSocialProposal(ans_dao_env)
 
-	TestFundingProposal(ans_dao_env)	
+	#TestFundingProposal(ans_dao_env)	
 
 	TestUpdateRegProposal(ans_dao_env)	
