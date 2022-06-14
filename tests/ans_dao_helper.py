@@ -30,6 +30,7 @@ import json, random
 from pyteal import *
 from numpy import int64
 import ans_helper as anshelper
+import hashlib
 
 import sys
 #sys.path.append('../')
@@ -273,14 +274,20 @@ def DeployANSDAO(algod_client: algod,
 		"https://ansdao.org".encode('utf-8') #url
 	]
 	
-	compiled_approval_program = compileTeal(approval_program(gov_asaid.to_bytes(8,'big')), Mode.Application, version=6)
+	compiled_approval_program = compileTeal(approval_program(gov_asaid), Mode.Application, version=6)
 	compiled_clear_state_program = compileTeal(clear_state_program(), Mode.Application,version=6)
+
+	
 	
 	#ans_approval_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_approval.teal'))
 	#ans_clear_state_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_clear_state.teal'))
 
 	ans_approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
 	ans_clear_state_program = compile_program(algod_client,str.encode(compiled_clear_state_program))
+
+	h = hashlib.new('sha256')
+	h.update(ans_approval_program)
+	print(h.hexdigest())
 	
 	txn = transaction.ApplicationCreateTxn(
 		sender=acct_owner,
@@ -291,7 +298,7 @@ def DeployANSDAO(algod_client: algod,
 		global_schema=global_schema,
 		local_schema=local_schema,
 		app_args=appargs,
-		foreign_assets=[85778236]
+		foreign_assets=[gov_asaid]
 	)
 	
 	# sign transaction
@@ -558,6 +565,7 @@ def DAODeclareResult(
 	ans_app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))
 	ans_clear_program = anshelper.compile_program(algod_client, str.encode(compiled_clear_state_program))
 
+	
 	txn_declare_result = transaction.ApplicationNoOpTxn(
 		sender=account.address_from_private_key(pvk_sender),
 		sp=algod_client.suggested_params(),

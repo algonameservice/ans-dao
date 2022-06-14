@@ -86,7 +86,7 @@ def approval_program(ARG_GOV_TOKEN):
         App.globalPut(Bytes("min_duration"), Btoi(Txn.application_args[2])),
         App.globalPut(Bytes("max_duration"), Btoi(Txn.application_args[3])),
         App.globalPut(Bytes("url"), Txn.application_args[4]),
-        App.globalPut(govtoken_asa_id, Txn.assets[0]),
+        App.globalPut(govtoken_asa_id, Txn.assets[0]), 
         ResetProposalParams(),
         App.globalPut(bytes_proposal_id,Int(31420)),
         Return(Int(1))
@@ -101,8 +101,7 @@ def approval_program(ARG_GOV_TOKEN):
             TxnField.type_enum: TxnType.AssetTransfer,
             TxnField.asset_receiver: Global.current_application_address(),
             TxnField.asset_amount: Int(0),
-            #TxnField.xfer_asset: Int(ARG_GOV_TOKEN) # Didn't work
-            TxnField.xfer_asset: Txn.assets[0]
+            TxnField.xfer_asset: Int(ARG_GOV_TOKEN)
         }),
         InnerTxnBuilder.Submit(),
         Return(Int(1))
@@ -292,7 +291,7 @@ def approval_program(ARG_GOV_TOKEN):
         ).Else(
             Err()
         ),
-        App.globalPut(bytes_total_coins_voted, Add(App.globalGet(bytes_total_coins_voted), Add(acct_balance_asa.load(), Int(1)))),
+        App.globalPut(bytes_total_coins_voted, Add(App.globalGet(bytes_total_coins_voted), acct_balance_asa.load())),
         Return(Int(1))
     ])
 
@@ -332,8 +331,8 @@ def approval_program(ARG_GOV_TOKEN):
 
     update_registry_approval_program = Seq([
         #TODO: make these assertions work
-        #Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Txn.application_args[1])),
-        #Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Txn.application_args[2])),
+        Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Txn.application_args[1])),
+        Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Txn.application_args[2])),
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields({
             TxnField.type_enum: TxnType.ApplicationCall,
@@ -361,7 +360,8 @@ def approval_program(ARG_GOV_TOKEN):
     def DidVotePass():
         return And(
             App.globalGet(bytes_votecount_yes)>App.globalGet(bytes_votecount_no),
-            App.globalGet(bytes_votecount_yes)>App.globalGet(bytes_votecount_abstain)
+            App.globalGet(bytes_votecount_yes)>App.globalGet(bytes_votecount_abstain),
+            App.globalGet(bytes_total_coins_voted) >= App.globalGet(Bytes("min_support"))
         )
 
     declare_result = Seq([
@@ -369,7 +369,6 @@ def approval_program(ARG_GOV_TOKEN):
             And(
                 Global.latest_timestamp()>=App.globalGet(bytes_voting_end),
                 App.globalGet(bytes_proposal_status)==Bytes("active"),
-                App.globalGet(bytes_total_coins_voted) >= App.globalGet(Bytes("min_support")),
                 Txn.assets[0] == App.globalGet(govtoken_asa_id)
                 # TODO: Add any more checks necessary here
             )
@@ -425,3 +424,8 @@ def approval_program(ARG_GOV_TOKEN):
     )
 
     return program
+
+with open('contract_approval.teal', 'w') as f:
+    compiled = compileTeal(approval_program(12345678), Mode.Application, version=6)
+    f.write(compiled)
+
