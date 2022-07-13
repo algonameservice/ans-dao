@@ -293,7 +293,7 @@ def approval_program(ARG_GOV_TOKEN):
         ),
         App.localPut(Int(0), bytes_proposal_id, App.globalGet(bytes_proposal_id)),
         App.localPut(Int(0), bytes_hasvoted, Bytes("YES")),
-        App.localPut(Int(0), Bytes("vote_response"), Txn.application_args[1]),
+        App.localPut(Int(0), bytes_voteresponse, Txn.application_args[1]),
         App.globalPut(bytes_total_coins_voted, Add(App.globalGet(bytes_total_coins_voted), acct_balance_asa.load())),
         Return(Int(1))
     ])
