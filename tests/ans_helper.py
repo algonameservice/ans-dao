@@ -73,8 +73,7 @@ def SetupIndexer(network):
 def GetFundingAccount(algod_client):
 
     # address: KLRZGUWF5WDUWZXSGCWA723FLZXMQ4GIPXD2UYJ6C74X3N3NES4QH5XIF4
-    passphrase= "crumble inquiry mixed teach february usage nerve nose brain angry broccoli attend cram empower immense chest safe field cup head badge strategy clip absent dice"
-
+    passphrase=mysecrets.MNEMONIC
     private_key = mnemonic.to_private_key(passphrase)
     sender = account.address_from_private_key(private_key)
     #print("Sender address: {}".format(sender))
@@ -86,8 +85,8 @@ def GetFundingAccount(algod_client):
 
 def GenerateAccount():
     new_private_key, new_address = account.generate_account()
-    #print("New address: {}".format(new_address))
-    #print("Passphrase: {}".format(mnemonic.from_private_key(new_private_key)))
+    print("New address: {}".format(new_address))
+    print("Passphrase: {}".format(mnemonic.from_private_key(new_private_key)))
     return new_address, mnemonic.from_private_key(new_private_key)
 
 def FundNewAccount(algod_client, receiver, amount, funding_acct_mnemonic):

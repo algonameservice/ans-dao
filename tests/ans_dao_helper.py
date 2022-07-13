@@ -81,8 +81,7 @@ def SetupIndexer(network):
 def GetFundingAccount(algod_client):
 
 	# address: KLRZGUWF5WDUWZXSGCWA723FLZXMQ4GIPXD2UYJ6C74X3N3NES4QH5XIF4
-	passphrase= "crumble inquiry mixed teach february usage nerve nose brain angry broccoli attend cram empower immense chest safe field cup head badge strategy clip absent dice"
-
+	passphrase= mysecrets.MNEMONIC
 	private_key = mnemonic.to_private_key(passphrase)
 	sender = account.address_from_private_key(private_key)
 	#print("Sender address: {}".format(sender))
@@ -131,12 +130,10 @@ def DeployANSToken(algod_client, asa_owner_mnemonic):
 		sp=algod_client.suggested_params(),
 		total=20000000000, #200M.00
 		default_frozen=False,
+		manager=sender_asa_deploy,
+		strict_empty_address_check=False,
 		unit_name="ANS",
 		asset_name="AlgorandNameService",
-		manager=sender_asa_deploy,
-		reserve=sender_asa_deploy,
-		freeze=sender_asa_deploy,
-		clawback=sender_asa_deploy,
 		url="https://algonameservice.com/token", 
 		decimals=2
 	)
@@ -265,7 +262,7 @@ def DeployANSDAO(algod_client: algod,
 	min_deposit = 20000000
 	#min_support = 20000#00
 	#min_duration = 2 # days
-	max_duration = 10 # days
+	max_duration = 60 # days
 	appargs = [
 		min_deposit.to_bytes(8, 'big'), # min deposit
 		min_support.to_bytes(8, 'big'), # min support
@@ -801,7 +798,7 @@ def TestFundingProposal(env: Env):
 
 	AddRandomVotesFromRandomAccounts(env, 1)
 	#time.sleep(100)
-
+	
 	print("Declaring Result")
 	DAODeclareResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, dot_algo_reg_app_id)
 	print("Vote Declared successfully")
@@ -857,6 +854,7 @@ def TestUpdateRegProposal(env: Env):
 	print_asset_holding(env.my_algod_client, logic.get_application_address(env.dao_app_id), env.gov_asa_id)
 	print("--------------------------------------------------------------------")
 	#DAO_APP_ID=86039171
+	'''
 	print("Attempting to add an Update Registry proposal")
 	DAOAddProposalUpdateReg(
 		env.my_algod_client,
@@ -877,14 +875,14 @@ def TestUpdateRegProposal(env: Env):
 	print("Successfully registered vote")
 	print("--------------------------------------------------------------------")
 
-	AddRandomVotesFromRandomAccounts(env, 1)
+	#AddRandomVotesFromRandomAccounts(env, 1)
 	#time.sleep(100)
-
+	
 	print("Declaring Result")
 	DAODeclareResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, dot_algo_reg_app_id)
 	print("Vote Declared successfully")
 	print("--------------------------------------------------------------------")
-
+	'''
 
 if __name__ == "__main__":
 	ans_dao_env = Env(SetupClient("purestake"))

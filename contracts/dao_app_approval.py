@@ -29,7 +29,7 @@ def approval_program(ARG_GOV_TOKEN):
 
     # Proposal params
     bytes_proposal_id = Bytes("proposal_id")
-    bytes_proposal_result = Bytes("UNKNOWN") # PASSED, REJECTED
+    bytes_proposal_result = Bytes("result") # PASSED, REJECTED
     bytes_proposal_initiator = Bytes("proposal_initiator") # Acct Addr
     bytes_proposal_status = Bytes("proposal_status") # Active, Completed
     bytes_proposal_type = Bytes("proposal_type") # Social/Funding/UpdateReg
@@ -271,7 +271,7 @@ def approval_program(ARG_GOV_TOKEN):
                 App.globalGet(bytes_voting_start) <= Global.latest_timestamp(),
                 Global.latest_timestamp() <= App.globalGet(bytes_voting_end),
                 Txn.assets[0]==App.globalGet(govtoken_asa_id),
-                acct_balance_asa.load()>=Int(0),
+                acct_balance_asa.load()>Int(0),
                 # Sender.deposit >= 0 (i.e user "deposited" his votes using deposit_vote_token)
                 Or(
                     users_last_proposal.load() == Int(0),
@@ -281,7 +281,7 @@ def approval_program(ARG_GOV_TOKEN):
         ),
         If(Txn.application_args[1]==bytes_yes)
         .Then(
-            App.globalPut(bytes_votecount_yes, Add(App.globalGet(bytes_votecount_yes),Int(1)))
+            App.globalPut(bytes_votecount_yes, Add(App.globalGet(bytes_votecount_yes),Int(1))),
         ).ElseIf(Txn.application_args[1]==bytes_no)
         .Then(
             App.globalPut(bytes_votecount_no, Add(App.globalGet(bytes_votecount_no),Int(1)))
@@ -291,6 +291,9 @@ def approval_program(ARG_GOV_TOKEN):
         ).Else(
             Err()
         ),
+        App.localPut(Int(0), bytes_proposal_id, App.globalGet(bytes_proposal_id)),
+        App.localPut(Int(0), bytes_hasvoted, Bytes("YES")),
+        App.localPut(Int(0), Bytes("vote_response"), Txn.application_args[1]),
         App.globalPut(bytes_total_coins_voted, Add(App.globalGet(bytes_total_coins_voted), acct_balance_asa.load())),
         Return(Int(1))
     ])
