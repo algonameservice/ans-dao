@@ -46,37 +46,30 @@ import datetime,time
 # Import PureStake API
 import mysecrets
 
-
 def SetupClient(network):
 
-	if(network=="sandbox"):
-		# Local sandbox node 
-		algod_address = "http://localhost:4001"
-		algod_token = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    if(network=="sandbox"):
+        # Local sandbox node 
+        algod_address = "http://localhost:4001"
+        algod_token = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
-	elif(network=="purestake"):
-		# Purestake conn
-		algod_address = "https://testnet-algorand.api.purestake.io/ps2"
-		algod_token = mysecrets.MY_PURESTAKE_TOKEN
-		headers = {
-			"X-API-Key": mysecrets.MY_PURESTAKE_TOKEN
-		}
+    elif(network=="purestake"):
+        # Purestake conn
+        algod_address = "https://testnet-api.algonode.cloud"
+        
+    else:
+        raise ValueError
 	
-	else:
-		raise ValueError
-
-	algod_client=algod.AlgodClient(algod_token, algod_address, headers=headers)
-	return algod_client
+    algod_client=algod.AlgodClient("", algod_address)
+    return algod_client
 
 def SetupIndexer(network):
-	if(network=="purestake"):
-		algod_address = "https://testnet-algorand.api.purestake.io/idx2"
-		headers = {
-			'X-API-key' : mysecrets.MY_PURESTAKE_TOKEN,
-		}
-		algod_indexer=indexer.IndexerClient("", algod_address, headers)
-	
-	return algod_indexer
+    if(network=="purestake"):
+        algod_address = "https://testnet-idx.algonode.cloud"
+       
+        algod_indexer=indexer.IndexerClient("", algod_address)
+    
+    return algod_indexer
 
 def GetFundingAccount(algod_client):
 
@@ -275,8 +268,6 @@ def DeployANSDAO(algod_client: algod,
 	compiled_approval_program = compileTeal(approval_program(gov_asaid), Mode.Application, version=6)
 	compiled_clear_state_program = compileTeal(clear_state_program(), Mode.Application,version=6)
 
-	
-	
 	#ans_approval_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_approval.teal'))
 	#ans_clear_state_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_clear_state.teal'))
 
@@ -515,7 +506,11 @@ def DAORegisterVote(
 	choice: str,
 	pvk_sender: str ,
 	gov_asaid: int64, 
-	dao_app_id: int64):
+	dao_app_id: int64,
+	reg_app_id: int64,
+	domain: str):
+
+	lsig = anshelper.prep_name_record_logic_sig(algod_client, domain, reg_app_id)
 
 	txn_dao_opt_in = transaction.ApplicationOptInTxn(
 		sender=account.address_from_private_key(pvk_sender),
@@ -539,6 +534,8 @@ def DAORegisterVote(
 			choice.encode("utf-8"),
 		],
 		foreign_assets=[gov_asaid],
+		foreign_apps=[reg_app_id],
+		accounts=[lsig.address()],
 		rekey_to=None
 	)
 

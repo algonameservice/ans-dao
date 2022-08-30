@@ -72,6 +72,14 @@ def approval_program(ARG_GOV_TOKEN):
     # initialization
     # Expected arguments:
     #   [deposit, min_support, min_duration, max_duration, url]
+
+    address_owns_ans = Seq([
+        domain := App.localGetEx(Int(1), Int(1), Bytes("name")),
+        If(domain.hasValue(),
+        Assert(domain.value() == Txn.sender()),
+        Return(Int(0)))
+    ])
+
     on_initialize = Seq([
         Assert(
             And(
@@ -258,10 +266,13 @@ def approval_program(ARG_GOV_TOKEN):
     ])
 
 
-    # Register vote:
+    #   Register vote:
     #   apps-args: ["vote", <yes/no/abstain>]
     #   foreign-assets: [<gov_token_asa_id>]
+    #   foreign-apps: [<reg-app-id>]
+    #   foreign-accounts: [<domain-lsig>]
     vote = Seq([
+        address_owns_ans,
         store_voters_token_balance(Txn.sender(),App.globalGet(govtoken_asa_id)),
         get_users_last_proposal(),
         Assert(

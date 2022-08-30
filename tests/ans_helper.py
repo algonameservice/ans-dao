@@ -38,7 +38,6 @@ import datetime,time
 # Import PureStake API
 import mysecrets
 
-
 def SetupClient(network):
 
     if(network=="sandbox"):
@@ -48,25 +47,19 @@ def SetupClient(network):
 
     elif(network=="purestake"):
         # Purestake conn
-        algod_address = "https://testnet-algorand.api.purestake.io/ps2"
-        algod_token = mysecrets.MY_PURESTAKE_TOKEN
-        headers = {
-            "X-API-Key": mysecrets.MY_PURESTAKE_TOKEN
-        }
-    
+        algod_address = "https://testnet-idx.algonode.cloud"
+        
     else:
         raise ValueError
 
-    algod_client=algod.AlgodClient(algod_token, algod_address, headers=headers)
+    algod_client=algod.AlgodClient("", algod_address)
     return algod_client
 
 def SetupIndexer(network):
     if(network=="purestake"):
-        algod_address = "https://testnet-algorand.api.purestake.io/idx2"
-        headers = {
-            'X-API-key' : 'iG4m46pAcU5ws8WYhgYPu1rywUbfYT2DaAfSs9Tv',
-        }
-        algod_indexer=indexer.IndexerClient("", algod_address, headers)
+        algod_address = "https://testnet-api.algonode.cloud"
+       
+        algod_indexer=indexer.IndexerClient("", algod_address)
     
     return algod_indexer
 
