@@ -1,3 +1,4 @@
+from email.mime import application
 from email.parser import BytesParser
 import sys
 from numpy import byte, uint
@@ -258,6 +259,39 @@ def approval_program(ARG_GOV_TOKEN):
     bytes_hasvoted = Bytes("has_voted")
     bytes_voteresponse = Bytes("vote_response")
 
+    # App-args: 
+    # DAO Registry Update - [duration (no.of days), url, approval_program, clear_program]
+    add_dao_update_proposal = Seq([
+        Assert(
+            And( 
+                App.globalGet(bytes_proposal_status) == Bytes("completed"),
+                Global.group_size()==Int(2),
+                App.globalGet(bytes_votecount_yes)==Int(0),
+                App.globalGet(bytes_votecount_no)==Int(0),
+                App.globalGet(bytes_votecount_abstain)==Int(0),
+                Btoi(Gtxn[1].application_args[1])<=max_duration,
+                Gtxn[0].type_enum() == TxnType.AssetTransfer,
+                Gtxn[0].asset_receiver() == Global.current_application_address(),
+                #how much deposit?
+                Gtxn[0].asset_amount() == deposit
+            )
+        ),
+        App.globalPut(bytes_proposal_id, Add(proposal_id_global,Int(1))),
+        App.globalPut(bytes_proposal_initiator, Gtxn[0].sender()),
+        App.globalPut(bytes_proposal_type, Bytes("dao_update")),
+        App.globalPut(Bytes("voting_start"), Global.latest_timestamp()),
+        #App.globalPut(Bytes("voting_end"), Add(Global.latest_timestamp(), Mul(Btoi(Gtxn[1].application_args[1]),Int(86400)))),
+        App.globalPut(Bytes("voting_end"), Add(Global.latest_timestamp(), Mul(Btoi(Gtxn[1].application_args[1]),Int(60)))),
+        App.globalPut(bytes_proposal_url, Gtxn[1].application_args[2]),
+        App.globalPut(bytes_proposal_status, Bytes("active")),
+        App.globalPut(bytes_proposal_result, Bytes("UNKNOWN")),
+        # TODO: Confirm the app_id is valid within reason
+        App.globalPut(bytes_reg_app_id_to_update, Global.current_application_id()),
+        App.globalPut(bytes_reg_app_progrm_hash, Sha512_256(Txn.application_args[3])),
+        App.globalPut(bytes_reg_clear_progrm_hash, Sha512_256(Txn.application_args[4])),
+        Return(Int(1))
+    ])
+
     on_register = Seq([
         App.localPut(Int(0), bytes_proposal_id, Int(0)),
         App.localPut(Int(0), bytes_voteresponse, Bytes("UNKNOWN")),
@@ -396,10 +430,19 @@ def approval_program(ARG_GOV_TOKEN):
             ])
             ).ElseIf(App.globalGet(bytes_proposal_type)==Bytes("updatereg"))
             .Then(update_registry_approval_program)
+            .ElseIf(App.globalGet(bytes_proposal_type) == Bytes("dao_update"))
+            .Then(Seq([
+                Assert(Global.group_size() == Int(2)),
+                Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
+                #Assert(Gtxn[1].type_enum() == TxnType.ApplicationCall),
+                #Assert(Gtxn[0].type_enum() == TxnType.ApplicationCall),
             ])
-        ).Else(Seq([
-            App.globalPut(bytes_proposal_result, Bytes("REJECTED")),
+            )
+            ])
             
+        ).Else(Seq([
+            Assert(Global.group_size() == Int(1)),
+            App.globalPut(bytes_proposal_result, Bytes("REJECTED")),
         ])
         ),
         return_deposit,
@@ -412,17 +455,24 @@ def approval_program(ARG_GOV_TOKEN):
         Return(Int(1))
     ])
 
+    dao_update_application = Seq([
+        Assert(Global.group_size() == Int(2)),
+        #Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
+    
+        #Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Txn.approval_program())),
+        #Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Txn.clear_state_program())),
+
+        #Need to have these transactions as atomic. If vote passed, 2 txns, else only 1
+        #if dao_update_proposal, check for these two transactions
+        Return(Int(1))
+    ])
+
     program = Cond(
         # Verfies that the application_id is 0, jumps to on_initialize.
         [Txn.application_id() == Int(0), on_initialize],
         # Verifies Update or delete transaction, rejects it.
-        [
-            Or(
-                Txn.on_completion() == OnComplete.UpdateApplication,
-                Txn.on_completion() == OnComplete.DeleteApplication
-            ),
-            Return(Int(0))
-        ],
+        [Txn.on_completion() == OnComplete.DeleteApplication, Return(Int(0))],
+        [Txn.on_completion() == OnComplete.UpdateApplication, dao_update_application],
         # Verifies closeout or OptIn transaction, approves it.
         [
             Or(
@@ -433,6 +483,7 @@ def approval_program(ARG_GOV_TOKEN):
         [Txn.on_completion() == OnComplete.OptIn, on_register],
         [Txn.application_args[0] == Bytes("opt_in_to_gov_token"), opt_in_to_gov_token],
         [Txn.application_args[0] == Bytes("add_proposal"), add_proposal],
+        [Txn.application_args[0] == Bytes("add_dao_update_proposal"), add_dao_update_proposal],
         [Txn.application_args[0] == Bytes("register_vote"), vote],
         [Txn.application_args[0] == Bytes("declare_result"), declare_result],
     )
