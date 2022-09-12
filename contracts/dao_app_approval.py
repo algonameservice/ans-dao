@@ -75,7 +75,7 @@ def approval_program(ARG_GOV_TOKEN):
     #   [deposit, min_support, min_duration, max_duration, url]
 
     address_owns_ans = Seq([
-        domain := App.localGetEx(Int(1), Int(1), Bytes("name")),
+        domain := App.localGetEx(Int(1), Int(1), Bytes("owner")),
         If(domain.hasValue(),
         Assert(domain.value() == Txn.sender()),
         Return(Int(0)))
@@ -409,13 +409,13 @@ def approval_program(ARG_GOV_TOKEN):
         return And(
             App.globalGet(bytes_votecount_yes)>App.globalGet(bytes_votecount_no),
             App.globalGet(bytes_votecount_yes)>App.globalGet(bytes_votecount_abstain),
-            App.globalGet(bytes_total_coins_voted) >= App.globalGet(Bytes("min_support"))
+            #App.globalGet(bytes_total_coins_voted) >= App.globalGet(Bytes("min_support"))
         )
 
     declare_result = Seq([
         Assert(
             And(
-                Global.latest_timestamp()>=App.globalGet(bytes_voting_end),
+                #Global.latest_timestamp()>=App.globalGet(bytes_voting_end),
                 App.globalGet(bytes_proposal_status)==Bytes("active"),
                 Txn.assets[0] == App.globalGet(govtoken_asa_id)
                 # TODO: Add any more checks necessary here
@@ -434,8 +434,8 @@ def approval_program(ARG_GOV_TOKEN):
             .Then(Seq([
                 Assert(Global.group_size() == Int(2)),
                 Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
-                #Assert(Gtxn[1].type_enum() == TxnType.ApplicationCall),
-                #Assert(Gtxn[0].type_enum() == TxnType.ApplicationCall),
+                Assert(Gtxn[1].type_enum() == TxnType.ApplicationCall),
+                Assert(Gtxn[0].type_enum() == TxnType.ApplicationCall),
             ])
             )
             ])
@@ -457,10 +457,10 @@ def approval_program(ARG_GOV_TOKEN):
 
     dao_update_application = Seq([
         Assert(Global.group_size() == Int(2)),
-        #Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
+        Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
     
-        #Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Txn.approval_program())),
-        #Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Txn.clear_state_program())),
+        #Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Gtxn[1].approval_program())),
+        #Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Gtxn[1].clear_state_program())),
 
         #Need to have these transactions as atomic. If vote passed, 2 txns, else only 1
         #if dao_update_proposal, check for these two transactions

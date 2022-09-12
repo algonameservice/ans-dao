@@ -378,9 +378,9 @@ if __name__ == "__main__":
 
 	ans_dao_env = Env(SetupClient("purestake"))
 
-	#TestDaoUpdateProposal(ans_dao_env)
+	TestDaoUpdateProposal(ans_dao_env)
 
-	TestSocialProposal(ans_dao_env)
+	#TestSocialProposal(ans_dao_env)
 
 	#TestFundingProposal(ans_dao_env)	
 
