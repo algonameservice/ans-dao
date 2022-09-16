@@ -202,6 +202,7 @@ def approval_program(ARG_GOV_TOKEN):
                     Gtxn[1].application_args[1] == Bytes("social"),
                     Gtxn[1].application_args[1] == Bytes("funding"),
                     Gtxn[1].application_args[1] == Bytes("updatereg"),
+                    Gtxn[1].application_args[1] == Bytes("dao_update")
                 )
             )
         ),
@@ -241,7 +242,12 @@ def approval_program(ARG_GOV_TOKEN):
                 App.globalPut(bytes_proposal_funding_amt_ans, Btoi(Gtxn[1].application_args[5])),
                 App.globalPut(bytes_funding_recipient, Gtxn[1].accounts[1])
         ])
-        ).ElseIf(Gtxn[1].application_args[1]==Bytes("updatereg"))
+        ).ElseIf(
+            Or(
+                Gtxn[1].application_args[1]==Bytes("updatereg"),
+                Gtxn[1].application_args[1]==Bytes("dao_update")
+            )
+        )
         .Then(
             Seq( 
                 # TODO: Confirm the app_id is valid within reason
@@ -258,39 +264,6 @@ def approval_program(ARG_GOV_TOKEN):
     bytes_abstain = Bytes("abstain")
     bytes_hasvoted = Bytes("has_voted")
     bytes_voteresponse = Bytes("vote_response")
-
-    # App-args: 
-    # DAO Registry Update - [duration (no.of days), url, approval_program, clear_program]
-    add_dao_update_proposal = Seq([
-        Assert(
-            And( 
-                App.globalGet(bytes_proposal_status) == Bytes("completed"),
-                Global.group_size()==Int(2),
-                App.globalGet(bytes_votecount_yes)==Int(0),
-                App.globalGet(bytes_votecount_no)==Int(0),
-                App.globalGet(bytes_votecount_abstain)==Int(0),
-                Btoi(Gtxn[1].application_args[1])<=max_duration,
-                Gtxn[0].type_enum() == TxnType.AssetTransfer,
-                Gtxn[0].asset_receiver() == Global.current_application_address(),
-                #how much deposit?
-                Gtxn[0].asset_amount() == deposit
-            )
-        ),
-        App.globalPut(bytes_proposal_id, Add(proposal_id_global,Int(1))),
-        App.globalPut(bytes_proposal_initiator, Gtxn[0].sender()),
-        App.globalPut(bytes_proposal_type, Bytes("dao_update")),
-        App.globalPut(Bytes("voting_start"), Global.latest_timestamp()),
-        #App.globalPut(Bytes("voting_end"), Add(Global.latest_timestamp(), Mul(Btoi(Gtxn[1].application_args[1]),Int(86400)))),
-        App.globalPut(Bytes("voting_end"), Add(Global.latest_timestamp(), Mul(Btoi(Gtxn[1].application_args[1]),Int(60)))),
-        App.globalPut(bytes_proposal_url, Gtxn[1].application_args[2]),
-        App.globalPut(bytes_proposal_status, Bytes("active")),
-        App.globalPut(bytes_proposal_result, Bytes("UNKNOWN")),
-        # TODO: Confirm the app_id is valid within reason
-        App.globalPut(bytes_reg_app_id_to_update, Global.current_application_id()),
-        App.globalPut(bytes_reg_app_progrm_hash, Sha512_256(Txn.application_args[3])),
-        App.globalPut(bytes_reg_clear_progrm_hash, Sha512_256(Txn.application_args[4])),
-        Return(Int(1))
-    ])
 
     on_register = Seq([
         App.localPut(Int(0), bytes_proposal_id, Int(0)),
@@ -314,7 +287,7 @@ def approval_program(ARG_GOV_TOKEN):
                 App.optedIn(Txn.sender(),App.id()),
                 # voting_start <= now <= voting_end
                 App.globalGet(bytes_voting_start) <= Global.latest_timestamp(),
-                Global.latest_timestamp() <= App.globalGet(bytes_voting_end),
+                #Global.latest_timestamp() <= App.globalGet(bytes_voting_end),
                 Txn.assets[0]==App.globalGet(govtoken_asa_id),
                 acct_balance_asa.load()>Int(0),
                 # Sender.deposit >= 0 (i.e user "deposited" his votes using deposit_vote_token)
@@ -409,7 +382,7 @@ def approval_program(ARG_GOV_TOKEN):
         return And(
             App.globalGet(bytes_votecount_yes)>App.globalGet(bytes_votecount_no),
             App.globalGet(bytes_votecount_yes)>App.globalGet(bytes_votecount_abstain),
-            #App.globalGet(bytes_total_coins_voted) >= App.globalGet(Bytes("min_support"))
+            App.globalGet(bytes_total_coins_voted) >= App.globalGet(Bytes("min_support"))
         )
 
     declare_result = Seq([
@@ -446,7 +419,8 @@ def approval_program(ARG_GOV_TOKEN):
         ])
         ),
         return_deposit,
-        ResetProposalParams(),
+        If(App.globalGet(bytes_proposal_type) != Bytes("dao_update"))
+        .Then(ResetProposalParams()),
         Return(Int(1))
     ])
 
@@ -458,10 +432,9 @@ def approval_program(ARG_GOV_TOKEN):
     dao_update_application = Seq([
         Assert(Global.group_size() == Int(2)),
         Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
-    
-        #Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Gtxn[1].approval_program())),
-        #Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Gtxn[1].clear_state_program())),
-
+        Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Txn.approval_program())),
+        Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Txn.clear_state_program())),
+        ResetProposalParams(),
         #Need to have these transactions as atomic. If vote passed, 2 txns, else only 1
         #if dao_update_proposal, check for these two transactions
         Return(Int(1))
@@ -483,7 +456,6 @@ def approval_program(ARG_GOV_TOKEN):
         [Txn.on_completion() == OnComplete.OptIn, on_register],
         [Txn.application_args[0] == Bytes("opt_in_to_gov_token"), opt_in_to_gov_token],
         [Txn.application_args[0] == Bytes("add_proposal"), add_proposal],
-        [Txn.application_args[0] == Bytes("add_dao_update_proposal"), add_dao_update_proposal],
         [Txn.application_args[0] == Bytes("register_vote"), vote],
         [Txn.application_args[0] == Bytes("declare_result"), declare_result],
     )

@@ -537,9 +537,11 @@ def DAOAddUpdateProposal(
 		foreign_apps=[reg_app_id],
 		accounts=[addr_recipient, logic.get_application_address(reg_app_id)],
 		app_args=[
-			"add_dao_update_proposal".encode("utf-8"),
+			"add_proposal".encode("utf-8"),
+			"dao_update".encode("utf-8"),
 			duration.to_bytes(8, 'big'),
 			"https://github.com/someproposal".encode("utf-8"),
+			dao_app_id.to_bytes(8, 'big'),
 			ans_app_program,
 			ans_clear_program
 		],
