@@ -72,7 +72,7 @@ def approval_program(ARG_GOV_TOKEN):
 
         #Changes made:
         App.globalPut(Bytes("sent_tokens_to_escrow"), Bytes("no")),
-        App.globalPut(Bytes("current_rewards_app_escrow"), Bytes("NONE"))
+        App.globalPut(Bytes("current_rewards_app_id"), Bytes("NONE"))
     ])
 
     # initialization
@@ -231,9 +231,16 @@ def approval_program(ARG_GOV_TOKEN):
                 TxnField.type_enum: TxnType.ApplicationCall,
                 TxnField.approval_program: Txn.application_args[4],
                 TxnField.clear_state_program: Txn.application_args[5],
-                TxnField.on_complete: OnComplete.NoOp
+                TxnField.accounts: [Global.current_application_address()],
+                TxnField.application_args: [Bytes("200000"), Bytes("30000")],
+                TxnField.on_completion: OnComplete.NoOp,
+                TxnField.global_num_byte_slices: Int(32),
+                TxnField.global_num_uints: Int(32),
+                TxnField.local_num_byte_slices: Int(8),
+                TxnField.local_num_uints: Int(8)
             }),
             InnerTxnBuilder.Submit(),
+            App.globalPut(Bytes("current_rewards_app_id"), InnerTxn.created_application_id())
         ])    
         )
         .ElseIf(Gtxn[1].application_args[1]==Bytes("funding"))
@@ -259,7 +266,8 @@ def approval_program(ARG_GOV_TOKEN):
                 ),
                 App.globalPut(bytes_reg_app_id_to_update,Txn.applications[1]),
                 App.globalPut(bytes_proposal_funding_amt_ans, Btoi(Gtxn[1].application_args[5])),
-                App.globalPut(bytes_funding_recipient, Gtxn[1].accounts[1])
+                App.globalPut(bytes_funding_recipient, Gtxn[1].accounts[1]),
+                
         ])
         ).ElseIf(
             Or(
@@ -272,7 +280,7 @@ def approval_program(ARG_GOV_TOKEN):
                 # TODO: Confirm the app_id is valid within reason
                 App.globalPut(bytes_reg_app_id_to_update, Btoi(Gtxn[1].application_args[4])),
                 App.globalPut(bytes_reg_app_progrm_hash, Sha512_256(Txn.application_args[5])),
-                App.globalPut(bytes_reg_clear_progrm_hash, Sha512_256(Txn.application_args[6]))
+                App.globalPut(bytes_reg_clear_progrm_hash, Sha512_256(Txn.application_args[6])),
             )
         ),
         
@@ -464,28 +472,43 @@ def approval_program(ARG_GOV_TOKEN):
 
     #TODO: current_rewards_app_escrow must be set when creating a proposal
     claim_reward = Seq([
-        Assert(Txn.sender() == App.globalGet(Bytes("current_rewards_app_escrow"))),
-        rewards_collected := App.localGetEx(Int(1), Int(0), Bytes("rewards_collected")),
-        If(rewards_collected.hasValue())
-        .Then(Assert(rewards_collected.value() == Bytes("no"))),
-        App.localPut(Int(1), Bytes("rewards_collected"), Bytes("yes")),
-        Return(Int(1))
+        escrow:=AppParam.address(Txn.applications[1]),
+        If(escrow.hasValue())
+        .Then(
+            Assert(Txn.sender() == escrow.value()),
+            rewards_collected := App.localGetEx(Int(1), Int(0), Bytes("rewards_collected")),
+            If(rewards_collected.hasValue())
+            .Then(Assert(rewards_collected.value() == Bytes("no"))),
+            App.localPut(Int(1), Bytes("rewards_collected"), Bytes("yes")),
+            Return(Int(1))
+        ).Else(
+            Return(Int(0))
+        )
+        
     ])
 
     #TODO: Set flag that the tokens are distributed once distributed
     #TODO: Reset flag in proposal_params()
     send_reward_tokens_to_escrow = Seq([
-        Assert(Bytes("sent_tokens_to_escrow") == Bytes("no")),
-        App.globalPut(Bytes("sent_tokens_to_escrow"), Bytes("yes")),
-        InnerTxnBuilder.Begin(),
-        InnerTxnBuilder.SetFields({
-            TxnField.type_enum: TxnType.AssetTransfer,
-            TxnField.asset_receiver: App.globalGet(Bytes("current_rewards_app_escrow")),
-            TxnField.asset_amount: Int(50000000),
-            TxnField.xfer_asset: Txn.assets[0]
-        }),
-        InnerTxnBuilder.Submit(),
-        Return(Int(1))
+        Assert(App.globalGet(Bytes("sent_tokens_to_escrow")) == Bytes("no")),
+        Assert(App.globalGet(Bytes("current_rewards_app_id")) == Txn.applications[1]),
+        
+        escrow:=AppParam.address(Txn.applications[1]),
+        If(escrow.hasValue())
+        .Then(
+            InnerTxnBuilder.Begin(),
+            InnerTxnBuilder.SetFields({
+                TxnField.type_enum: TxnType.AssetTransfer,
+                TxnField.asset_receiver: escrow.value(),
+                TxnField.asset_amount: Int(50000000),
+                TxnField.xfer_asset: Txn.assets[0]
+            }),
+            InnerTxnBuilder.Submit(),
+            App.globalPut(Bytes("sent_tokens_to_escrow"), Bytes("yes")),
+            Return(Int(1))
+        ).Else(
+            Return(Int(0))
+        )
     ])
 
     program = Cond(

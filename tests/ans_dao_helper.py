@@ -655,6 +655,41 @@ def DAODeclareResult(
 		print("There is some error")
 		print(err)
 
+def get_rewards_app(dao_app_id):
+
+	algod_indexer = SetupIndexer("purestake")
+	response = algod_indexer.applications(dao_app_id)
+	global_state = response["application"]["params"]["global-state"]
+	for key_value in global_state:
+		if(base64.b64decode(key_value['key']).decode()=="current_rewards_app_id"):
+			rewards_app = key_value['value']['uint']
+			return rewards_app
+	
+def DAOSendRewardsToEscrow(
+	algod_client: algod,
+	pvk_sender: str ,
+	gov_asaid: int64, 
+	dao_app_id: int64):
+	
+	txn_register_vote = transaction.ApplicationNoOpTxn(
+		sender=account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		index=dao_app_id,
+		app_args=[
+			"send_rewards_tokens_to_escrow".encode("utf-8")
+		],
+		foreign_assets=[gov_asaid],
+		foreign_apps=[get_rewards_app(dao_app_id)],
+		rekey_to=None
+	)
+
+	try:
+		txn_id = txn_register_vote.get_txid()
+		algod_client.send_transaction(txn_register_vote.sign(pvk_sender))
+		wait_for_confirmation(algod_client, txn_id)
+	except Exception as err:
+		print(err)
+
 def DAODeclareUpdateRegResult(
 	algod_client: algod,
 	pvk_sender: str,

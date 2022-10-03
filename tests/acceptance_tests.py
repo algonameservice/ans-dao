@@ -23,7 +23,7 @@ class Env(object):
 		print("--------------------------------------------------------------------")
 		
 		print("Funding DAO APP's escrow account: ")
-		FundNewAccount(self.my_algod_client, acct_dao_escrow, 1000000, self._funding_acct_mnemonic)
+		FundNewAccount(self.my_algod_client, acct_dao_escrow, 4000000, self._funding_acct_mnemonic)
 		print("Successfully funded DAO APP's escrow account with 1 ALGO")
 		print("--------------------------------------------------------------------")
 	
@@ -113,7 +113,21 @@ def TestSocialProposal(env: Env):
 	print_asset_holding(env.my_algod_client, new_acct_addr, env.gov_asa_id)
 	print("Successfully added social proposal")
 	print("--------------------------------------------------------------------")
-
+	get_rewards_app(env.dao_app_id)
+	print("Sending rewards to rewards escrow app")
+	print("--------------------------------------------------------------------")
+	#TODO: Fund rewards dapp
+	print("Funding rewards DAPP")
+	FundNewAccount(env.my_algod_client, logic.get_application_address(get_rewards_app(env.dao_app_id)), 1000000, env.funding_acct_mnemonic)
+	print("Sucessfully funded rewards DAPP")
+	DAOOptInToGOVASA(env.my_algod_client, pvk_new_acct, env.gov_asa_id, get_rewards_app(env.dao_app_id))
+	print("Rewards dapp successfully opted in")
+	#TODO: Optin to ANS ASA with rewards DAPP
+	DAOSendRewardsToEscrow(env.my_algod_client, pvk_new_acct, env.gov_asa_id, env.dao_app_id)
+	
+	print("Successfully sent rewards to DAO Escrow")
+	
+	'''
 	print("Funding acct with some more ALGOs to meet raised min balance")
 	print("Attempting to vote on the social proposal")
 	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
@@ -127,7 +141,7 @@ def TestSocialProposal(env: Env):
 	DAODeclareResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, 812342)
 	print("Vote Declared successfully")
 	print("--------------------------------------------------------------------")
-
+	'''
 def TestFundingProposal(env: Env):
 
 	new_acct_addr, new_acct_mnemonic = GenerateAccount()

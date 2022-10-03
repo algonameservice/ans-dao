@@ -25,7 +25,7 @@ def rewards_approval_program():
             TxnField.type_enum: TxnType.AssetTransfer,
             TxnField.asset_receiver: Global.current_application_address(),
             TxnField.asset_amount: Int(0),
-            TxnField.xfer_asset: gov_token
+            TxnField.xfer_asset: Txn.assets[0]
         }),
         InnerTxnBuilder.Submit(),
         Return(Int(1))
