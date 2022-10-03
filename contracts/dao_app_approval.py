@@ -185,6 +185,26 @@ def approval_program(ARG_GOV_TOKEN):
         )
     ])
 
+    @Subroutine(TealType.none)
+    def deploy_rewards_dapp(approval_index, clear_program_index):
+        return Seq([
+            InnerTxnBuilder.Begin(),
+            InnerTxnBuilder.SetFields({
+                TxnField.type_enum: TxnType.ApplicationCall,
+                TxnField.approval_program: Txn.application_args[approval_index],
+                TxnField.clear_state_program: Txn.application_args[clear_program_index],
+                TxnField.accounts: [Global.current_application_address()],
+                TxnField.application_args: [Itob(Global.current_application_id()), Itob(App.globalGet(govtoken_asa_id))],
+                TxnField.on_completion: OnComplete.NoOp,
+                TxnField.global_num_byte_slices: Int(32),
+                TxnField.global_num_uints: Int(32),
+                TxnField.local_num_byte_slices: Int(8),
+                TxnField.local_num_uints: Int(8)
+            }),
+            InnerTxnBuilder.Submit(),
+            App.globalPut(Bytes("current_rewards_app_id"), InnerTxn.created_application_id())
+        ])
+
     # App-args: 
     # Social - [ type Social , duration (no. of days), url ]
     # Funding - [ type Funding , duration (no. of days), url, amt_algos, amt_ans ];
@@ -226,24 +246,7 @@ def approval_program(ARG_GOV_TOKEN):
         App.globalPut(bytes_proposal_status, Bytes("active")),
         App.globalPut(bytes_proposal_result, Bytes("UNKNOWN")),
         If(Gtxn[1].application_args[1] == Bytes("social"))
-        .Then(Seq([
-            InnerTxnBuilder.Begin(),
-            InnerTxnBuilder.SetFields({
-                TxnField.type_enum: TxnType.ApplicationCall,
-                TxnField.approval_program: Txn.application_args[4],
-                TxnField.clear_state_program: Txn.application_args[5],
-                TxnField.accounts: [Global.current_application_address()],
-                TxnField.application_args: [Bytes("200000"), Bytes("30000")],
-                TxnField.on_completion: OnComplete.NoOp,
-                TxnField.global_num_byte_slices: Int(32),
-                TxnField.global_num_uints: Int(32),
-                TxnField.local_num_byte_slices: Int(8),
-                TxnField.local_num_uints: Int(8)
-            }),
-            InnerTxnBuilder.Submit(),
-            App.globalPut(Bytes("current_rewards_app_id"), InnerTxn.created_application_id())
-        ])    
-        )
+        .Then(deploy_rewards_dapp(Int(4), Int(5)))
         .ElseIf(Gtxn[1].application_args[1]==Bytes("funding"))
         .Then(
             Seq([ 

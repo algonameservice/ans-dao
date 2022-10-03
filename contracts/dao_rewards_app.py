@@ -13,12 +13,12 @@ def rewards_approval_program():
     on_creation = Seq([
         Assert(Txn.sender() == dao_dapp_escrow),
         App.globalPut(Bytes("dao_dapp_id"), dao_dapp_id),
-        App.globalPut(Bytes("approval_hash"),Sha512_256(Txn.approval_program())),
-        App.globalPut(Bytes("clear_program_hash"),Sha512_256(Txn.clear_state_program())),
+        App.globalPut(Bytes("dao_gov_token"), gov_token),
         Return(Int(1))
     ])
 
     opt_in_to_gov_token = Seq([
+        Assert(App.globalGet(Bytes("dao_gov_token")) == Txn.assets[0]),
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields({
             TxnField.type_enum: TxnType.AssetTransfer,
@@ -31,6 +31,8 @@ def rewards_approval_program():
     ])
 
     claim_reward = Seq([
+        Assert(App.globalGet(Bytes("dao_dapp_id")) == Txn.applications[1]),
+        Assert(App.globalGet(Bytes("dao_gov_token")) == Txn.assets[0]),
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields({
             TxnField.type_enum: TxnType.AssetTransfer,
