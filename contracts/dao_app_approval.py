@@ -1,3 +1,4 @@
+from contracts.dao_app_clear import clear_state_program
 from email.mime import application
 from email.parser import BytesParser
 import sys
@@ -67,7 +68,11 @@ def approval_program(ARG_GOV_TOKEN):
         App.globalPut(bytes_proposal_funding_amt_ans,Int(0)),
         App.globalPut(bytes_funding_recipient,Global.zero_address()),
         App.globalPut(bytes_reg_app_id_to_update,Int(0)),
-        App.globalPut(bytes_total_coins_voted, Int(0))
+        App.globalPut(bytes_total_coins_voted, Int(0)),
+
+        #Changes made:
+        App.globalPut(Bytes("sent_tokens_to_escrow"), Bytes("no")),
+        App.globalPut(Bytes("current_rewards_app_escrow"), Bytes("NONE"))
     ])
 
     # initialization
@@ -185,6 +190,8 @@ def approval_program(ARG_GOV_TOKEN):
     #           foreign-accounts = [<funding_recipient>];
     #           foreign-apps = [reg_app_id]
     # UpdateReg - [ type UpdateReg , duration (no. of days), url, reg_app_id, approval_program ]
+
+    #validate rewards dapp hash
     add_proposal = Seq([
         # TODO: Uncomment below once vars are initiatilized
         Assert(
@@ -217,7 +224,19 @@ def approval_program(ARG_GOV_TOKEN):
         App.globalPut(bytes_proposal_url, Gtxn[1].application_args[3]),
         App.globalPut(bytes_proposal_status, Bytes("active")),
         App.globalPut(bytes_proposal_result, Bytes("UNKNOWN")),
-        If(Gtxn[1].application_args[1]==Bytes("funding"))
+        If(Gtxn[1].application_args[1] == Bytes("social"))
+        .Then(Seq([
+            InnerTxnBuilder.Begin(),
+            InnerTxnBuilder.SetFields({
+                TxnField.type_enum: TxnType.ApplicationCall,
+                TxnField.approval_program: Txn.application_args[4],
+                TxnField.clear_state_program: Txn.application_args[5],
+                TxnField.on_complete: OnComplete.NoOp
+            }),
+            InnerTxnBuilder.Submit(),
+        ])    
+        )
+        .ElseIf(Gtxn[1].application_args[1]==Bytes("funding"))
         .Then(
             Seq([ 
                 # TODO: Check maybe value
@@ -256,6 +275,7 @@ def approval_program(ARG_GOV_TOKEN):
                 App.globalPut(bytes_reg_clear_progrm_hash, Sha512_256(Txn.application_args[6]))
             )
         ),
+        
         Return(Int(1))
     ])
 
@@ -312,6 +332,8 @@ def approval_program(ARG_GOV_TOKEN):
         App.localPut(Int(0), bytes_proposal_id, App.globalGet(bytes_proposal_id)),
         App.localPut(Int(0), bytes_hasvoted, Bytes("YES")),
         App.localPut(Int(0), bytes_voteresponse, Txn.application_args[1]),
+        #Changes made
+        App.localPut(Int(0), Bytes("rewards_collected"), Bytes("no")),
         App.globalPut(bytes_total_coins_voted, Add(App.globalGet(bytes_total_coins_voted), acct_balance_asa.load())),
         Return(Int(1))
     ])
@@ -440,6 +462,32 @@ def approval_program(ARG_GOV_TOKEN):
         Return(Int(1))
     ])
 
+    #TODO: current_rewards_app_escrow must be set when creating a proposal
+    claim_reward = Seq([
+        Assert(Txn.sender() == App.globalGet(Bytes("current_rewards_app_escrow"))),
+        rewards_collected := App.localGetEx(Int(1), Int(0), Bytes("rewards_collected")),
+        If(rewards_collected.hasValue())
+        .Then(Assert(rewards_collected.value() == Bytes("no"))),
+        App.localPut(Int(1), Bytes("rewards_collected"), Bytes("yes")),
+        Return(Int(1))
+    ])
+
+    #TODO: Set flag that the tokens are distributed once distributed
+    #TODO: Reset flag in proposal_params()
+    send_reward_tokens_to_escrow = Seq([
+        Assert(Bytes("sent_tokens_to_escrow") == Bytes("no")),
+        App.globalPut(Bytes("sent_tokens_to_escrow"), Bytes("yes")),
+        InnerTxnBuilder.Begin(),
+        InnerTxnBuilder.SetFields({
+            TxnField.type_enum: TxnType.AssetTransfer,
+            TxnField.asset_receiver: App.globalGet(Bytes("current_rewards_app_escrow")),
+            TxnField.asset_amount: Int(50000000),
+            TxnField.xfer_asset: Txn.assets[0]
+        }),
+        InnerTxnBuilder.Submit(),
+        Return(Int(1))
+    ])
+
     program = Cond(
         # Verfies that the application_id is 0, jumps to on_initialize.
         [Txn.application_id() == Int(0), on_initialize],
@@ -455,6 +503,8 @@ def approval_program(ARG_GOV_TOKEN):
         ],
         [Txn.on_completion() == OnComplete.OptIn, on_register],
         [Txn.application_args[0] == Bytes("opt_in_to_gov_token"), opt_in_to_gov_token],
+        [Txn.application_args[0] == Bytes("claim_reward"), claim_reward],
+        [Txn.application_args[0] == Bytes("send_reward_tokens_to_escrow"), send_reward_tokens_to_escrow],
         [Txn.application_args[0] == Bytes("add_proposal"), add_proposal],
         [Txn.application_args[0] == Bytes("register_vote"), vote],
         [Txn.application_args[0] == Bytes("declare_result"), declare_result],

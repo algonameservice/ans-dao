@@ -40,6 +40,8 @@ sys.path.insert(0,'..')
 #from contracts.dao_app_approval import approval_program
 from contracts.dao_app_approval import approval_program
 from contracts.dao_app_clear import clear_state_program
+from contracts.dao_rewards_app import rewards_approval_program
+from contracts.dao_rewards_clear import rewards_clear_state_program
 
 import base64
 import datetime,time
@@ -352,6 +354,13 @@ def DAOAddProposalSocial(
 	)
 	
 	Grp_txns_unsign.append(deposit_txn)
+	
+	#Get rewards program dapp code and clear code here
+	compiled_approval_program = anshelper.compileTeal(rewards_approval_program(), Mode.Application,version=6)
+	compiled_clear_state_program = anshelper.compileTeal(rewards_clear_state_program(), Mode.Application,version=6)
+
+	app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))
+	clear_program = anshelper.compile_program(algod_client, str.encode(compiled_clear_state_program))
 
 	txn_add_proposal = transaction.ApplicationNoOpTxn(
 		sender=account.address_from_private_key(pk_sender),
@@ -361,7 +370,9 @@ def DAOAddProposalSocial(
 			"add_proposal".encode("utf-8"),
 			"social".encode("utf-8"),
 			duration.to_bytes(8, 'big'),
-			"https://github.com/someproposal"
+			"https://github.com/someproposal",
+			app_program,
+			clear_program
 		]
 		#rekey_to=constants.ZERO_ADDRESS
 	)
