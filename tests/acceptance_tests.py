@@ -31,6 +31,7 @@ class Env(object):
 		DAOOptInToGOVASA(self.my_algod_client, mnemonic.to_private_key(self._funding_acct_mnemonic), self._GOV_ASA_ID, self._DAO_APP_ID)
 		print("Successfully opted DAO APP in to GOV ASA")
 		print("--------------------------------------------------------------------")
+		TransferASA(self.my_algod_client,20001000,mnemonic.to_private_key(self.funding_acct_mnemonic),logic.get_application_address(self._DAO_APP_ID),self._GOV_ASA_ID)
 	
 	@property
 	def my_algod_client(self):
@@ -127,7 +128,6 @@ def TestSocialProposal(env: Env):
 	
 	print("Successfully sent rewards to DAO Escrow")
 	
-	'''
 	print("Funding acct with some more ALGOs to meet raised min balance")
 	print("Attempting to vote on the social proposal")
 	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
@@ -141,7 +141,8 @@ def TestSocialProposal(env: Env):
 	DAODeclareResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, 812342)
 	print("Vote Declared successfully")
 	print("--------------------------------------------------------------------")
-	'''
+	print("Collecting rewards for voting")
+	DAOCollectRewards(env.my_algod_client, pvk_new_acct, env.gov_asa_id, env.dao_app_id)
 def TestFundingProposal(env: Env):
 
 	new_acct_addr, new_acct_mnemonic = GenerateAccount()

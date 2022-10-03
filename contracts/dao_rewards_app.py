@@ -19,7 +19,6 @@ def rewards_approval_program():
     ])
 
     opt_in_to_gov_token = Seq([
-        #TODO: Validate sender and make sure this txn can't be abused
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields({
             TxnField.type_enum: TxnType.AssetTransfer,
@@ -31,22 +30,21 @@ def rewards_approval_program():
         Return(Int(1))
     ])
 
-    accept_rewards = Seq([
-        rewards_collected := App.localGetEx(Int(0), dao_dapp_id, Bytes("has_voted")),
-        If(rewards_collected.hasValue())
-        .Then(Assert(rewards_collected.value() == Bytes("no"))),
+    claim_reward = Seq([
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields({
             TxnField.type_enum: TxnType.AssetTransfer,
             TxnField.asset_receiver: Txn.sender(),
             TxnField.asset_amount: Int(500),
-            TxnField.xfer_asset: gov_token
+            TxnField.xfer_asset: Txn.assets[0]
         }),
         InnerTxnBuilder.Next(),
         InnerTxnBuilder.SetFields({
             TxnField.type_enum: TxnType.ApplicationCall,
-            TxnField.application_id: dao_dapp_id,
-            TxnField.application_args: [Bytes("claim_reward")]
+            TxnField.application_id: Txn.applications[1],
+            TxnField.application_args: [Bytes("claim_reward")],
+            TxnField.applications: [Global.current_application_id()],
+            TxnField.accounts: [Txn.sender()]
         }),
         InnerTxnBuilder.Submit(),
         Return(Int(1))
@@ -58,7 +56,7 @@ def rewards_approval_program():
         [Txn.application_args[0] == Bytes("opt_in_to_gov_token"), opt_in_to_gov_token],
         # Verifies Update or delete transaction, rejects it.
         [Txn.on_completion() == OnComplete.DeleteApplication, Return(Int(0))],
-        [Txn.application_args[0] == Bytes("accept_rewards"), accept_rewards],
+        [Txn.application_args[0] == Bytes("claim_reward"), claim_reward],
         
     )
 

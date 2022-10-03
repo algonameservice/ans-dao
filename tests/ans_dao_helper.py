@@ -671,21 +671,47 @@ def DAOSendRewardsToEscrow(
 	gov_asaid: int64, 
 	dao_app_id: int64):
 	
-	txn_register_vote = transaction.ApplicationNoOpTxn(
+	send_rewards_txn = transaction.ApplicationNoOpTxn(
 		sender=account.address_from_private_key(pvk_sender),
 		sp=algod_client.suggested_params(),
 		index=dao_app_id,
 		app_args=[
-			"send_rewards_tokens_to_escrow".encode("utf-8")
+			"send_reward_tokens_to_escrow".encode("utf-8")
 		],
 		foreign_assets=[gov_asaid],
 		foreign_apps=[get_rewards_app(dao_app_id)],
+		accounts=[logic.get_application_address(get_rewards_app(dao_app_id))],
 		rekey_to=None
 	)
 
 	try:
-		txn_id = txn_register_vote.get_txid()
-		algod_client.send_transaction(txn_register_vote.sign(pvk_sender))
+		txn_id = send_rewards_txn.get_txid()
+		algod_client.send_transaction(send_rewards_txn.sign(pvk_sender))
+		wait_for_confirmation(algod_client, txn_id)
+	except Exception as err:
+		print(err)
+
+def DAOCollectRewards(
+	algod_client: algod,
+	pvk_sender: str ,
+	gov_asaid: int64, 
+	dao_app_id: int64):
+	
+	collect_rewards_txn = transaction.ApplicationNoOpTxn(
+		sender=account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		index=get_rewards_app(dao_app_id),
+		app_args=[
+			"claim_reward".encode("utf-8")
+		],
+		foreign_assets=[gov_asaid],
+		foreign_apps=[dao_app_id],
+		rekey_to=None
+	)
+
+	try:
+		txn_id = collect_rewards_txn.get_txid()
+		algod_client.send_transaction(collect_rewards_txn.sign(pvk_sender))
 		wait_for_confirmation(algod_client, txn_id)
 	except Exception as err:
 		print(err)

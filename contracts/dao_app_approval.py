@@ -72,7 +72,8 @@ def approval_program(ARG_GOV_TOKEN):
 
         #Changes made:
         App.globalPut(Bytes("sent_tokens_to_escrow"), Bytes("no")),
-        App.globalPut(Bytes("current_rewards_app_id"), Bytes("NONE"))
+        #TODO: Cannot have the line below as rewards can only be claimed after results are declared
+        #App.globalPut(Bytes("current_rewards_app_id"), Bytes("NONE"))
     ])
 
     # initialization
@@ -472,6 +473,8 @@ def approval_program(ARG_GOV_TOKEN):
 
     #TODO: current_rewards_app_escrow must be set when creating a proposal
     claim_reward = Seq([
+        Assert(App.globalGet(bytes_proposal_status)==Bytes("completed")),
+        Assert(App.globalGet(Bytes("current_rewards_app_id")) == Txn.applications[1]),
         escrow:=AppParam.address(Txn.applications[1]),
         If(escrow.hasValue())
         .Then(
@@ -492,15 +495,14 @@ def approval_program(ARG_GOV_TOKEN):
     send_reward_tokens_to_escrow = Seq([
         Assert(App.globalGet(Bytes("sent_tokens_to_escrow")) == Bytes("no")),
         Assert(App.globalGet(Bytes("current_rewards_app_id")) == Txn.applications[1]),
-        
-        escrow:=AppParam.address(Txn.applications[1]),
+        escrow:=AppParam.address(Int(1)),
         If(escrow.hasValue())
         .Then(
             InnerTxnBuilder.Begin(),
             InnerTxnBuilder.SetFields({
                 TxnField.type_enum: TxnType.AssetTransfer,
                 TxnField.asset_receiver: escrow.value(),
-                TxnField.asset_amount: Int(50000000),
+                TxnField.asset_amount: Int(500000),
                 TxnField.xfer_asset: Txn.assets[0]
             }),
             InnerTxnBuilder.Submit(),
