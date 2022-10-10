@@ -158,8 +158,11 @@ def approval_program(ARG_GOV_TOKEN):
         return Seq(
             balance := AssetHolding.balance(addr_sender, asaid),
             If(balance.hasValue())
-            .Then(
-                acct_balance_asa.store(balance.value())
+            .Then(Seq([
+                acct_balance_asa.store(balance.value()),
+                App.localPut(Int(0),Bytes("voted_with_tokens"),balance.value())
+            ])
+               
             ).Else(
                 acct_balance_asa.store(Int(0))
             )
@@ -481,12 +484,14 @@ def approval_program(ARG_GOV_TOKEN):
         escrow:=AppParam.address(Txn.applications[1]),
         If(escrow.hasValue())
         .Then(
-            Assert(Txn.sender() == escrow.value()),
-            rewards_collected := App.localGetEx(Int(1), Int(0), Bytes("rewards_collected")),
-            If(rewards_collected.hasValue())
-            .Then(Assert(rewards_collected.value() == Bytes("no"))),
-            App.localPut(Int(1), Bytes("rewards_collected"), Bytes("yes")),
-            Return(Int(1))
+            Seq([
+                Assert(Txn.sender() == escrow.value()),
+                rewards_collected := App.localGetEx(Int(1), Int(0), Bytes("rewards_collected")),
+                If(rewards_collected.hasValue())
+                .Then(Assert(rewards_collected.value() == Bytes("no"))),
+                App.localPut(Int(1), Bytes("rewards_collected"), Bytes("yes")),
+                Return(Int(1))
+            ])
         ).Else(
             Return(Int(0))
         )
@@ -495,22 +500,29 @@ def approval_program(ARG_GOV_TOKEN):
 
     #TODO: Set flag that the tokens are distributed once distributed
     #TODO: Reset flag in proposal_params()
+
+    #TODO: DAO Dapp should call the optin function of the new dapp to have it optin to the gov asset
+    #TODO: This happens only for the first x amount of proposals (x placeholder = 100)
+    #TODO: We still have to deploy new contract (after x proposals) for staking gov tokens, but not for collecting rewards
+    #TODO: send_tokens_to_escrow not needed anymore
     send_reward_tokens_to_escrow = Seq([
         Assert(App.globalGet(Bytes("sent_tokens_to_escrow")) == Bytes("no")),
         Assert(App.globalGet(Bytes("current_rewards_app_id")) == Txn.applications[1]),
         escrow:=AppParam.address(Int(1)),
         If(escrow.hasValue())
         .Then(
-            InnerTxnBuilder.Begin(),
-            InnerTxnBuilder.SetFields({
-                TxnField.type_enum: TxnType.AssetTransfer,
-                TxnField.asset_receiver: escrow.value(),
-                TxnField.asset_amount: Int(500000),
-                TxnField.xfer_asset: Txn.assets[0]
-            }),
-            InnerTxnBuilder.Submit(),
-            App.globalPut(Bytes("sent_tokens_to_escrow"), Bytes("yes")),
-            Return(Int(1))
+            Seq([
+                InnerTxnBuilder.Begin(),
+                InnerTxnBuilder.SetFields({
+                    TxnField.type_enum: TxnType.AssetTransfer,
+                    TxnField.asset_receiver: escrow.value(),
+                    TxnField.asset_amount: Int(500000),
+                    TxnField.xfer_asset: Txn.assets[0]
+                }),
+                InnerTxnBuilder.Submit(),
+                App.globalPut(Bytes("sent_tokens_to_escrow"), Bytes("yes")),
+                Return(Int(1))
+            ])
         ).Else(
             Return(Int(0))
         )
@@ -544,3 +556,20 @@ with open('contract_approval.teal', 'w') as f:
     compiled = compileTeal(approval_program(12345678), Mode.Application, version=6)
     f.write(compiled)
 
+#TODO: (NOW)
+'''
+Delegate is a function
+Delegate amount and delegate address is set by the user
+Details stored in local state
+Delegatee has number of tokens delegated written to his local storage
+Check condition if vote delegated
+
+delegate():
+A - delegator
+B - delegatee
+
+undelegate as long as the guy hasn't voted and proposal is active
+withdraw from SC and send tokens back to delegator, subtract amount from delegatee
+
+Delegatee can choose to stake/not stake when voting
+'''

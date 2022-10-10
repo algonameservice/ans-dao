@@ -30,6 +30,8 @@ def rewards_approval_program():
         Return(Int(1))
     ])
 
+    #TODO: Cannot be Txn.sender(), take an account from the accounts array
+    #TODO: Have the user opt in to this account to collect rewards
     claim_reward = Seq([
         Assert(App.globalGet(Bytes("dao_dapp_id")) == Txn.applications[1]),
         Assert(App.globalGet(Bytes("dao_gov_token")) == Txn.assets[0]),
