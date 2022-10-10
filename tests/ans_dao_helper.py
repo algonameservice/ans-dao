@@ -373,7 +373,8 @@ def DAOAddProposalSocial(
 			"https://github.com/someproposal",
 			app_program,
 			clear_program
-		]
+		],
+		foreign_assets=[gov_asaid]
 		#rekey_to=constants.ZERO_ADDRESS
 	)
 

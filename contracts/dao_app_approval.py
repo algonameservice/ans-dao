@@ -1,8 +1,5 @@
-from contracts.dao_app_clear import clear_state_program
-from email.mime import application
-from email.parser import BytesParser
 import sys
-from numpy import byte, uint
+from numpy import byte, uint, uint64
 
 from pyteal import *
 
@@ -48,7 +45,9 @@ def approval_program(ARG_GOV_TOKEN):
     bytes_total_coins_voted = Bytes("total_coins_voted")
     bytes_reg_app_progrm_hash = Bytes("reg_app_progrm_hash") # For ex: 123456
     bytes_reg_clear_progrm_hash = Bytes("reg_clear_progrm_hash") # For ex: 123456
+    bytes_proposal_count = Bytes("proposal_count")
     proposal_id_global = App.globalGet(bytes_proposal_id)
+    no_of_proposals = App.globalGet(bytes_proposal_count)
 
     @Subroutine(TealType.none)
     def ResetProposalParams():
@@ -73,7 +72,7 @@ def approval_program(ARG_GOV_TOKEN):
         #Changes made:
         App.globalPut(Bytes("sent_tokens_to_escrow"), Bytes("no")),
         #TODO: Cannot have the line below as rewards can only be claimed after results are declared
-        #App.globalPut(Bytes("current_rewards_app_id"), Bytes("NONE"))
+        App.globalPut(Bytes("current_rewards_app_id"), Bytes("NONE"))
     ])
 
     # initialization
@@ -101,7 +100,8 @@ def approval_program(ARG_GOV_TOKEN):
         App.globalPut(Bytes("min_duration"), Btoi(Txn.application_args[2])),
         App.globalPut(Bytes("max_duration"), Btoi(Txn.application_args[3])),
         App.globalPut(Bytes("url"), Txn.application_args[4]),
-        App.globalPut(govtoken_asa_id, Txn.assets[0]), 
+        App.globalPut(govtoken_asa_id, Txn.assets[0]),
+        App.globalPut(bytes_proposal_count, Int(0)),
         ResetProposalParams(),
         App.globalPut(bytes_proposal_id,Int(31420)),
         Return(Int(1))
@@ -188,6 +188,12 @@ def approval_program(ARG_GOV_TOKEN):
         )
     ])
 
+    created_dapp_id = ScratchVar(TealType.uint64)
+    
+    #TODO: DAO Dapp should call the optin function of the new dapp to have it optin to the gov asset
+    #TODO: This happens only for the first x amount of proposals (x placeholder = 100)
+    #TODO: We still have to deploy new contract (after x proposals) for staking gov tokens, but not for collecting rewards
+
     @Subroutine(TealType.none)
     def deploy_rewards_dapp(approval_index, clear_program_index):
         return Seq([
@@ -205,7 +211,35 @@ def approval_program(ARG_GOV_TOKEN):
                 TxnField.local_num_uints: Int(8)
             }),
             InnerTxnBuilder.Submit(),
-            App.globalPut(Bytes("current_rewards_app_id"), InnerTxn.created_application_id())
+            App.globalPut(Bytes("current_rewards_app_id"), InnerTxn.created_application_id()),
+            created_dapp_escrow := AppParam.address(InnerTxn.created_application_id()),
+            created_dapp_id.store(InnerTxn.created_application_id()),
+            If(App.globalGet(bytes_proposal_count) <= Int(100))
+            .Then(Seq([
+                InnerTxnBuilder.Begin(),
+                InnerTxnBuilder.SetFields({
+                    TxnField.type_enum: TxnType.Payment,
+                    TxnField.amount: Int(300000),
+                    TxnField.receiver: created_dapp_escrow.value(),
+                }),
+                InnerTxnBuilder.Next(),
+                InnerTxnBuilder.SetFields({
+                    TxnField.type_enum: TxnType.ApplicationCall,
+                    TxnField.application_id: created_dapp_id.load(),
+                    TxnField.accounts: [Global.current_application_address()],
+                    TxnField.application_args: [Bytes("opt_in_to_gov_token")],
+                    TxnField.assets: [App.globalGet(govtoken_asa_id)],
+                    TxnField.on_completion: OnComplete.NoOp
+                }),
+                InnerTxnBuilder.Next(),
+                InnerTxnBuilder.SetFields({
+                    TxnField.type_enum: TxnType.AssetTransfer,
+                    TxnField.asset_receiver: created_dapp_escrow.value(),
+                    TxnField.asset_amount: Int(500),
+                    TxnField.xfer_asset: Txn.assets[0]
+                }),
+                InnerTxnBuilder.Submit()
+            ]))
         ])
 
     # App-args: 
@@ -290,7 +324,7 @@ def approval_program(ARG_GOV_TOKEN):
                 App.globalPut(bytes_reg_clear_progrm_hash, Sha512_256(Txn.application_args[6])),
             )
         ),
-        
+        App.globalPut(bytes_proposal_count, Add(App.globalGet(bytes_proposal_count), Int(1))),
         Return(Int(1))
     ])
 
@@ -307,12 +341,12 @@ def approval_program(ARG_GOV_TOKEN):
         Return(Int(1))
     ])
 
-
     #   Register vote:
     #   apps-args: ["vote", <yes/no/abstain>]
     #   foreign-assets: [<gov_token_asa_id>]
     #   foreign-apps: [<reg-app-id>]
     #   foreign-accounts: [<domain-lsig>]
+
     vote = Seq([
         address_owns_ans,
         store_voters_token_balance(Txn.sender(),App.globalGet(govtoken_asa_id)),
@@ -385,7 +419,6 @@ def approval_program(ARG_GOV_TOKEN):
         }),
         InnerTxnBuilder.Submit()
     ])
-
 
     update_registry_approval_program = Seq([
         #TODO: make these assertions work
@@ -477,57 +510,6 @@ def approval_program(ARG_GOV_TOKEN):
         Return(Int(1))
     ])
 
-    #TODO: current_rewards_app_escrow must be set when creating a proposal
-    claim_reward = Seq([
-        Assert(App.globalGet(bytes_proposal_status)==Bytes("completed")),
-        Assert(App.globalGet(Bytes("current_rewards_app_id")) == Txn.applications[1]),
-        escrow:=AppParam.address(Txn.applications[1]),
-        If(escrow.hasValue())
-        .Then(
-            Seq([
-                Assert(Txn.sender() == escrow.value()),
-                rewards_collected := App.localGetEx(Int(1), Int(0), Bytes("rewards_collected")),
-                If(rewards_collected.hasValue())
-                .Then(Assert(rewards_collected.value() == Bytes("no"))),
-                App.localPut(Int(1), Bytes("rewards_collected"), Bytes("yes")),
-                Return(Int(1))
-            ])
-        ).Else(
-            Return(Int(0))
-        )
-        
-    ])
-
-    #TODO: Set flag that the tokens are distributed once distributed
-    #TODO: Reset flag in proposal_params()
-
-    #TODO: DAO Dapp should call the optin function of the new dapp to have it optin to the gov asset
-    #TODO: This happens only for the first x amount of proposals (x placeholder = 100)
-    #TODO: We still have to deploy new contract (after x proposals) for staking gov tokens, but not for collecting rewards
-    #TODO: send_tokens_to_escrow not needed anymore
-    send_reward_tokens_to_escrow = Seq([
-        Assert(App.globalGet(Bytes("sent_tokens_to_escrow")) == Bytes("no")),
-        Assert(App.globalGet(Bytes("current_rewards_app_id")) == Txn.applications[1]),
-        escrow:=AppParam.address(Int(1)),
-        If(escrow.hasValue())
-        .Then(
-            Seq([
-                InnerTxnBuilder.Begin(),
-                InnerTxnBuilder.SetFields({
-                    TxnField.type_enum: TxnType.AssetTransfer,
-                    TxnField.asset_receiver: escrow.value(),
-                    TxnField.asset_amount: Int(500000),
-                    TxnField.xfer_asset: Txn.assets[0]
-                }),
-                InnerTxnBuilder.Submit(),
-                App.globalPut(Bytes("sent_tokens_to_escrow"), Bytes("yes")),
-                Return(Int(1))
-            ])
-        ).Else(
-            Return(Int(0))
-        )
-    ])
-
     program = Cond(
         # Verfies that the application_id is 0, jumps to on_initialize.
         [Txn.application_id() == Int(0), on_initialize],
@@ -543,8 +525,8 @@ def approval_program(ARG_GOV_TOKEN):
         ],
         [Txn.on_completion() == OnComplete.OptIn, on_register],
         [Txn.application_args[0] == Bytes("opt_in_to_gov_token"), opt_in_to_gov_token],
-        [Txn.application_args[0] == Bytes("claim_reward"), claim_reward],
-        [Txn.application_args[0] == Bytes("send_reward_tokens_to_escrow"), send_reward_tokens_to_escrow],
+        #[Txn.application_args[0] == Bytes("claim_reward"), claim_reward],
+        #[Txn.application_args[0] == Bytes("send_reward_tokens_to_escrow"), send_reward_tokens_to_escrow],
         [Txn.application_args[0] == Bytes("add_proposal"), add_proposal],
         [Txn.application_args[0] == Bytes("register_vote"), vote],
         [Txn.application_args[0] == Bytes("declare_result"), declare_result],

@@ -10,7 +10,19 @@ def rewards_approval_program():
     dao_dapp_id = Btoi(Txn.application_args[0])
     gov_token = Btoi(Txn.application_args[1])
 
+    valid_contract_creation = And(
+        Global.group_size() == Int(3),
+        Gtxn[0].type_enum() == TxnType.Payment,
+        Gtxn[0].receiver() == Global.current_application_address(),
+        Gtxn[0].sender() == dao_dapp_escrow,
+        Gtxn[1].application_id() == Global.current_application_id(),
+        Gtxn[1].application_args[0] == Bytes("opt_in_to_gov_token"),
+        Gtxn[2].type_enum() == TxnType.AssetTransfer,
+        Gtxn[2].asset_receiver() == Global.current_application_address()
+    )
+
     on_creation = Seq([
+        Assert(Global.group_size() == Int(1)),
         Assert(Txn.sender() == dao_dapp_escrow),
         App.globalPut(Bytes("dao_dapp_id"), dao_dapp_id),
         App.globalPut(Bytes("dao_gov_token"), gov_token),
@@ -18,6 +30,7 @@ def rewards_approval_program():
     ])
 
     opt_in_to_gov_token = Seq([
+        Assert(valid_contract_creation == Int(1)),
         Assert(App.globalGet(Bytes("dao_gov_token")) == Txn.assets[0]),
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields({

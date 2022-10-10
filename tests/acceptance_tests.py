@@ -23,7 +23,7 @@ class Env(object):
 		print("--------------------------------------------------------------------")
 		
 		print("Funding DAO APP's escrow account: ")
-		FundNewAccount(self.my_algod_client, acct_dao_escrow, 4000000, self._funding_acct_mnemonic)
+		FundNewAccount(self.my_algod_client, acct_dao_escrow, 5000000, self._funding_acct_mnemonic)
 		print("Successfully funded DAO APP's escrow account with 1 ALGO")
 		print("--------------------------------------------------------------------")
 	
@@ -115,9 +115,7 @@ def TestSocialProposal(env: Env):
 	print("Successfully added social proposal")
 	print("--------------------------------------------------------------------")
 	get_rewards_app(env.dao_app_id)
-	print("Sending rewards to rewards escrow app")
-	print("--------------------------------------------------------------------")
-	#TODO: Fund rewards dapp
+	'''
 	print("Funding rewards DAPP")
 	FundNewAccount(env.my_algod_client, logic.get_application_address(get_rewards_app(env.dao_app_id)), 1000000, env.funding_acct_mnemonic)
 	print("Sucessfully funded rewards DAPP")
@@ -127,7 +125,7 @@ def TestSocialProposal(env: Env):
 	DAOSendRewardsToEscrow(env.my_algod_client, pvk_new_acct, env.gov_asa_id, env.dao_app_id)
 	
 	print("Successfully sent rewards to DAO Escrow")
-	
+	'''
 	print("Funding acct with some more ALGOs to meet raised min balance")
 	print("Attempting to vote on the social proposal")
 	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
@@ -141,8 +139,10 @@ def TestSocialProposal(env: Env):
 	DAODeclareResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, 812342)
 	print("Vote Declared successfully")
 	print("--------------------------------------------------------------------")
+	'''
 	print("Collecting rewards for voting")
 	DAOCollectRewards(env.my_algod_client, pvk_new_acct, env.gov_asa_id, env.dao_app_id)
+	'''
 def TestFundingProposal(env: Env):
 
 	new_acct_addr, new_acct_mnemonic = GenerateAccount()
