@@ -591,6 +591,7 @@ def DAORegisterVote(
 		sp=algod_client.suggested_params(),
 		index=dao_app_id
 	)
+	print('Opting into DAO Dapp')
 
 	try:
 		txn_id = txn_dao_opt_in.get_txid()
@@ -598,6 +599,44 @@ def DAORegisterVote(
 		wait_for_confirmation(algod_client, txn_id)
 	except Exception as err:
 		print(err)
+
+	print('Opting into rewards DAPP')
+
+	rewards_app_id = get_rewards_app(dao_app_id)
+	txn_rewards_dapp_opt_in = transaction.ApplicationOptInTxn(
+		sender=account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		index=rewards_app_id
+	)
+
+	try:
+		txn_id = txn_rewards_dapp_opt_in.get_txid()
+		algod_client.send_transaction(txn_rewards_dapp_opt_in.sign(pvk_sender))
+		wait_for_confirmation(algod_client, txn_id)
+	except Exception as err:
+		print(err)
+
+	print('Staking and submitting vote')
+
+	stake_amount = 1000
+	txn_stake = transaction.ApplicationNoOpTxn(
+		sender=account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		index=rewards_app_id,
+		app_args=[
+			"stake".encode("utf-8"),
+			stake_amount.to_bytes(8,'big')
+		],
+		rekey_to=None
+	)
+
+	txn_submit_stake = transaction.AssetTransferTxn(
+		sender=account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		receiver=logic.get_application_address(rewards_app_id),
+		amt=stake_amount,
+		index=gov_asaid
+	)
 
 	txn_register_vote = transaction.ApplicationNoOpTxn(
 		sender=account.address_from_private_key(pvk_sender),
@@ -613,11 +652,20 @@ def DAORegisterVote(
 		rekey_to=None
 	)
 
+	Grp_txns_unsign = [txn_stake, txn_submit_stake, txn_register_vote]
+
+	Grp_txns_packed_unsigned = transaction.assign_group_id(Grp_txns_unsign)
+	Grp_txns_signed = []
+	
+	for i in range(0,3):
+		Grp_txns_signed.append(Grp_txns_unsign[i].sign(pvk_sender))
+	
 	try:
-		txn_id = txn_register_vote.get_txid()
-		algod_client.send_transaction(txn_register_vote.sign(pvk_sender))
+		txn_id = Grp_txns_signed[1].transaction.get_txid()
+		algod_client.send_transactions(Grp_txns_signed)
 		wait_for_confirmation(algod_client, txn_id)
 	except Exception as err:
+		print("There is some error")
 		print(err)
 
 def DAODeclareResult(

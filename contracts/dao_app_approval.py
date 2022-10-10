@@ -68,10 +68,6 @@ def approval_program(ARG_GOV_TOKEN):
         App.globalPut(bytes_funding_recipient,Global.zero_address()),
         App.globalPut(bytes_reg_app_id_to_update,Int(0)),
         App.globalPut(bytes_total_coins_voted, Int(0)),
-
-        #Changes made:
-        App.globalPut(Bytes("sent_tokens_to_escrow"), Bytes("no")),
-        #TODO: Cannot have the line below as rewards can only be claimed after results are declared
         App.globalPut(Bytes("current_rewards_app_id"), Bytes("NONE"))
     ])
 
@@ -190,10 +186,7 @@ def approval_program(ARG_GOV_TOKEN):
 
     created_dapp_id = ScratchVar(TealType.uint64)
     
-    #TODO: DAO Dapp should call the optin function of the new dapp to have it optin to the gov asset
-    #TODO: This happens only for the first x amount of proposals (x placeholder = 100)
-    #TODO: We still have to deploy new contract (after x proposals) for staking gov tokens, but not for collecting rewards
-
+    
     @Subroutine(TealType.none)
     def deploy_rewards_dapp(approval_index, clear_program_index):
         return Seq([
@@ -249,6 +242,8 @@ def approval_program(ARG_GOV_TOKEN):
     #           foreign-apps = [reg_app_id]
     # UpdateReg - [ type UpdateReg , duration (no. of days), url, reg_app_id, approval_program ]
 
+    #Assets:
+    # All proposals should have gov asa as first asset in the foreign_assets array
     #validate rewards dapp hash
     add_proposal = Seq([
         # TODO: Uncomment below once vars are initiatilized
@@ -348,6 +343,8 @@ def approval_program(ARG_GOV_TOKEN):
     #   foreign-accounts: [<domain-lsig>]
 
     vote = Seq([
+        rewards_dapp_escrow := AppParam.address(Txn.applications[1]),
+        
         address_owns_ans,
         store_voters_token_balance(Txn.sender(),App.globalGet(govtoken_asa_id)),
         get_users_last_proposal(),
@@ -525,8 +522,6 @@ def approval_program(ARG_GOV_TOKEN):
         ],
         [Txn.on_completion() == OnComplete.OptIn, on_register],
         [Txn.application_args[0] == Bytes("opt_in_to_gov_token"), opt_in_to_gov_token],
-        #[Txn.application_args[0] == Bytes("claim_reward"), claim_reward],
-        #[Txn.application_args[0] == Bytes("send_reward_tokens_to_escrow"), send_reward_tokens_to_escrow],
         [Txn.application_args[0] == Bytes("add_proposal"), add_proposal],
         [Txn.application_args[0] == Bytes("register_vote"), vote],
         [Txn.application_args[0] == Bytes("declare_result"), declare_result],
@@ -554,4 +549,20 @@ undelegate as long as the guy hasn't voted and proposal is active
 withdraw from SC and send tokens back to delegator, subtract amount from delegatee
 
 Delegatee can choose to stake/not stake when voting
+'''
+
+'''
+Assert(Global.group_size() == Int(3)),
+        Assert(
+            And(
+                Gtxn[0].application_id() == App.globalGet(Bytes("current_rewards_app_id")),
+                Gtxn[0].application_args[0] == Bytes("stake"),
+                Gtxn[1].type_enum() == TxnType.AssetTransfer,
+                Gtxn[1].xfer_asset() == App.globalGet(govtoken_asa_id),
+                Gtxn[1].asset_amount() == Btoi(Gtxn[0].application_args[1]),
+                Gtxn[1].receiver() == rewards_dapp_escrow.value(),
+                Gtxn[2].application_id() == Global.current_application_id(),
+                Gtxn[2].application_args[0] == Bytes("register_vote")
+            )
+        ),
 '''
