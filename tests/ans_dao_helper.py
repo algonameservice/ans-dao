@@ -647,7 +647,7 @@ def DAORegisterVote(
 			choice.encode("utf-8"),
 		],
 		foreign_assets=[gov_asaid],
-		foreign_apps=[reg_app_id],
+		foreign_apps=[reg_app_id, rewards_app_id],
 		accounts=[lsig.address()],
 		rekey_to=None
 	)

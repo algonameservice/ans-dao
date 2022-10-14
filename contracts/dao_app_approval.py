@@ -343,8 +343,20 @@ def approval_program(ARG_GOV_TOKEN):
     #   foreign-accounts: [<domain-lsig>]
 
     vote = Seq([
-        rewards_dapp_escrow := AppParam.address(Txn.applications[1]),
-        
+        rewards_dapp_escrow := AppParam.address(Txn.applications[2]),
+        Assert(Global.group_size() == Int(3)),
+        Assert(
+            And(
+                Gtxn[0].application_id() == App.globalGet(Bytes("current_rewards_app_id")),
+                Gtxn[0].application_args[0] == Bytes("stake"),
+                Gtxn[1].type_enum() == TxnType.AssetTransfer,
+                Gtxn[1].xfer_asset() == App.globalGet(govtoken_asa_id),
+                Gtxn[1].asset_amount() == Btoi(Gtxn[0].application_args[1]),
+                Gtxn[1].asset_receiver() == rewards_dapp_escrow.value(),
+                Gtxn[2].application_id() == Global.current_application_id(),
+                Gtxn[2].application_args[0] == Bytes("register_vote")
+            )
+        ),
         address_owns_ans,
         store_voters_token_balance(Txn.sender(),App.globalGet(govtoken_asa_id)),
         get_users_last_proposal(),
@@ -551,18 +563,3 @@ withdraw from SC and send tokens back to delegator, subtract amount from delegat
 Delegatee can choose to stake/not stake when voting
 '''
 
-'''
-Assert(Global.group_size() == Int(3)),
-        Assert(
-            And(
-                Gtxn[0].application_id() == App.globalGet(Bytes("current_rewards_app_id")),
-                Gtxn[0].application_args[0] == Bytes("stake"),
-                Gtxn[1].type_enum() == TxnType.AssetTransfer,
-                Gtxn[1].xfer_asset() == App.globalGet(govtoken_asa_id),
-                Gtxn[1].asset_amount() == Btoi(Gtxn[0].application_args[1]),
-                Gtxn[1].receiver() == rewards_dapp_escrow.value(),
-                Gtxn[2].application_id() == Global.current_application_id(),
-                Gtxn[2].application_args[0] == Bytes("register_vote")
-            )
-        ),
-'''

@@ -73,7 +73,7 @@ def rewards_approval_program():
                 Gtxn[1].type_enum() == TxnType.AssetTransfer,
                 Gtxn[1].xfer_asset() == App.globalGet(Bytes("dao_gov_token")),
                 Gtxn[1].asset_amount() == Btoi(Gtxn[0].application_args[1]),
-                Gtxn[1].receiver() == Global.current_application_address(),
+                Gtxn[1].asset_receiver() == Global.current_application_address(),
                 Gtxn[2].application_id() == App.globalGet(Bytes("dao_dapp_id")),
                 Gtxn[2].application_args[0] == Bytes("register_vote")
             )
@@ -106,3 +106,6 @@ def rewards_approval_program():
 
     return program
 
+'''
+        
+        '''
