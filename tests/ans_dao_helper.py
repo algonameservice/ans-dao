@@ -575,6 +575,20 @@ def DAOAddUpdateProposal(
 	except Exception as err:
 		print(err)
 
+def DappOptIn(algod_client, pvk_sender, app_id):
+	txn_dao_opt_in = transaction.ApplicationOptInTxn(
+		sender=account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		index=app_id
+	)
+
+	try:
+		txn_id = txn_dao_opt_in.get_txid()
+		algod_client.send_transaction(txn_dao_opt_in.sign(pvk_sender))
+		wait_for_confirmation(algod_client, txn_id)
+	except Exception as err:
+		print(err)
+
 def DAORegisterVote(
 	algod_client: algod,
 	choice: str,
@@ -721,18 +735,69 @@ def delegate_vote(algod_client: algod,
 	gov_asaid: int64, 
 	dao_app_id: int64):
 
+	asset_transfer_txn = transaction.AssetTransferTxn(
+		sender = account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		receiver=logic.get_application_address(get_rewards_app(dao_app_id)),
+		amt=vote_amount,
+		index=gov_asaid
+	)
 	
-	collect_rewards_txn = transaction.ApplicationNoOpTxn(
+	delegate_vote_txn = transaction.ApplicationNoOpTxn(
 		sender=account.address_from_private_key(pvk_sender),
 		sp=algod_client.suggested_params(),
 		index=get_rewards_app(dao_app_id),
 		app_args=[
-			"claim_reward".encode("utf-8")
+			"delegate".encode("utf-8"),
+			vote_amount.to_bytes(8, 'big')
 		],
+		accounts=[delegatee_address],
 		foreign_assets=[gov_asaid],
 		foreign_apps=[dao_app_id],
 		rekey_to=None
 	)
+
+	Grp_txns_unsign = [asset_transfer_txn, delegate_vote_txn]
+
+	Grp_txns_packed_unsigned = transaction.assign_group_id(Grp_txns_unsign)
+	Grp_txns_signed = []
+	
+	for i in range(2):
+		Grp_txns_signed.append(Grp_txns_unsign[i].sign(pvk_sender))
+	
+	try:
+		txn_id = Grp_txns_signed[1].transaction.get_txid()
+		algod_client.send_transactions(Grp_txns_signed)
+		wait_for_confirmation(algod_client, txn_id)
+	except Exception as err:
+		print(err)
+
+def undo_delegate(algod_client: algod,
+	pvk_sender: str,
+	delegatee_address: str,
+	gov_asaid: int64, 
+	dao_app_id: int64):
+
+	undo_delegate_vote_txn = transaction.ApplicationNoOpTxn(
+		sender=account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		index=get_rewards_app(dao_app_id),
+		app_args=[
+			"undo_delegate".encode("utf-8"),
+		],
+		accounts=[delegatee_address],
+		foreign_assets=[gov_asaid],
+		foreign_apps=[dao_app_id],
+		rekey_to=None
+	)
+
+
+	try:
+		txn_id = undo_delegate_vote_txn.get_txid()
+		algod_client.send_transaction(undo_delegate_vote_txn.sign(pvk_sender))
+		wait_for_confirmation(algod_client, txn_id)
+	except Exception as err:
+		print(err)
 
 def DAOCollectRewards(
 	algod_client: algod,

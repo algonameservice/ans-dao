@@ -76,21 +76,33 @@ def AddRandomVotesFromRandomAccounts(env: Env, num: int64):
 def TestSocialProposal(env: Env):
 
 	new_acct_addr, new_acct_mnemonic = GenerateAccount()
+	second_acct_addr, second_acct_mnemonic = GenerateAccount()
 	pvk_funding_acct = mnemonic.to_private_key(env.funding_acct_mnemonic)
 	pvk_new_acct = mnemonic.to_private_key(new_acct_mnemonic)
+	second_acct = mnemonic.to_private_key(second_acct_mnemonic)
 
 	print("Generated new account: "+new_acct_addr)
 	FundNewAccount(env.my_algod_client, new_acct_addr, 9000000, env.funding_acct_mnemonic)
-	print("Funded new account {} with 1 ALGO and new balance is: {:,} ALGOs".format(new_acct_addr,util.microalgos_to_algos(env.my_algod_client.account_info(new_acct_addr).get('amount'))))
+	print("Funded new account {} with 9 ALGO and new balance is: {:,} ALGOs".format(new_acct_addr,util.microalgos_to_algos(env.my_algod_client.account_info(new_acct_addr).get('amount'))))
 	
+	FundNewAccount(env.my_algod_client, second_acct_addr, 2000000, env.funding_acct_mnemonic)
+	print("Funded second account {} with 2 ALGO and new balance is: {:,} ALGOs".format(new_acct_addr,util.microalgos_to_algos(env.my_algod_client.account_info(second_acct_addr).get('amount'))))
 	print("--------------------------------------------------------------------")
 
 	ASAOptIn(env.my_algod_client, pvk_new_acct, env.gov_asa_id)
 	print("New account opted in to the GOV ASA")
 	print("--------------------------------------------------------------------")
+	
+	ASAOptIn(env.my_algod_client, second_acct, env.gov_asa_id)
+	print("Second account opted in to the GOV ASA")
+	print("--------------------------------------------------------------------")
 
 	print("Attempting to transfer 200k ANS to new account")
 	TransferASA(env.my_algod_client,20002000,pvk_funding_acct,new_acct_addr,env.gov_asa_id)
+	
+	print("Attempting to transfer 200k ANS to second account")
+	TransferASA(env.my_algod_client,20002000,pvk_funding_acct,second_acct_addr,env.gov_asa_id)
+	
 	print("Funded new account "+new_acct_addr+"with 200k ANS and new balance is: ")
 	print_asset_holding(env.my_algod_client,new_acct_addr, env._GOV_ASA_ID)
 	print("--------------------------------------------------------------------")
@@ -114,7 +126,22 @@ def TestSocialProposal(env: Env):
 	print_asset_holding(env.my_algod_client, new_acct_addr, env.gov_asa_id)
 	print("Successfully added social proposal")
 	print("--------------------------------------------------------------------")
-	get_rewards_app(env.dao_app_id)
+
+	print("First account opting in to DAO Daoo")
+	DappOptIn(env.my_algod_client, pvk_new_acct, env.dao_app_id)
+	DappOptIn(env.my_algod_client, pvk_new_acct, get_rewards_app(env.dao_app_id))
+
+	print("Second account opting into both DApps")
+	DappOptIn(env.my_algod_client, second_acct, env.dao_app_id)
+	DappOptIn(env.my_algod_client, second_acct, get_rewards_app(env.dao_app_id))
+	
+	print("Delegating vote")
+	delegate_vote(env.my_algod_client, pvk_new_acct, second_acct_addr, 1000, env.gov_asa_id, env.dao_app_id)
+	
+	print("Undo Delegate vote")
+	undo_delegate(env.my_algod_client, pvk_new_acct, second_acct_addr, env.gov_asa_id, env.dao_app_id)
+
+	'''
 	print("Funding acct with some more ALGOs to meet raised min balance")
 	print("Attempting to vote on the social proposal")
 	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
@@ -130,7 +157,7 @@ def TestSocialProposal(env: Env):
 	DAODeclareResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, 812342)
 	print("Vote Declared successfully")
 	print("--------------------------------------------------------------------")
-	
+	'''
 	
 	
 def TestFundingProposal(env: Env):
