@@ -713,32 +713,26 @@ def get_rewards_app(dao_app_id):
 		if(base64.b64decode(key_value['key']).decode()=="current_rewards_app_id"):
 			rewards_app = key_value['value']['uint']
 			return rewards_app
-	
-def DAOSendRewardsToEscrow(
-	algod_client: algod,
-	pvk_sender: str ,
+
+def delegate_vote(algod_client: algod,
+	pvk_sender: str,
+	delegatee_address: str,
+	vote_amount: int64,
 	gov_asaid: int64, 
 	dao_app_id: int64):
+
 	
-	send_rewards_txn = transaction.ApplicationNoOpTxn(
+	collect_rewards_txn = transaction.ApplicationNoOpTxn(
 		sender=account.address_from_private_key(pvk_sender),
 		sp=algod_client.suggested_params(),
-		index=dao_app_id,
+		index=get_rewards_app(dao_app_id),
 		app_args=[
-			"send_reward_tokens_to_escrow".encode("utf-8")
+			"claim_reward".encode("utf-8")
 		],
 		foreign_assets=[gov_asaid],
-		foreign_apps=[get_rewards_app(dao_app_id)],
-		accounts=[logic.get_application_address(get_rewards_app(dao_app_id))],
+		foreign_apps=[dao_app_id],
 		rekey_to=None
 	)
-
-	try:
-		txn_id = send_rewards_txn.get_txid()
-		algod_client.send_transaction(send_rewards_txn.sign(pvk_sender))
-		wait_for_confirmation(algod_client, txn_id)
-	except Exception as err:
-		print(err)
 
 def DAOCollectRewards(
 	algod_client: algod,

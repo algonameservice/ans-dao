@@ -123,15 +123,16 @@ def TestSocialProposal(env: Env):
 
 	#AddRandomVotesFromRandomAccounts(env, 2)
 	#time.sleep(100)
+	print("Collecting rewards for voting")
+	DAOCollectRewards(env.my_algod_client, pvk_new_acct, env.gov_asa_id, env.dao_app_id)
 
 	print("Declaring Result")
 	DAODeclareResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, 812342)
 	print("Vote Declared successfully")
 	print("--------------------------------------------------------------------")
-	'''
-	print("Collecting rewards for voting")
-	DAOCollectRewards(env.my_algod_client, pvk_new_acct, env.gov_asa_id, env.dao_app_id)
-	'''
+	
+	
+	
 def TestFundingProposal(env: Env):
 
 	new_acct_addr, new_acct_mnemonic = GenerateAccount()

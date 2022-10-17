@@ -10,6 +10,9 @@ def rewards_approval_program():
     dao_dapp_id = Btoi(Txn.application_args[0])
     gov_token = Btoi(Txn.application_args[1])
 
+    DAO_DAPP_ID = Bytes("dao_dapp_id")
+    GOV_ASA_ID = Bytes("dao_gov_token")
+
     valid_contract_creation = And(
         Global.group_size() == Int(3),
         Gtxn[0].type_enum() == TxnType.Payment,
@@ -24,14 +27,14 @@ def rewards_approval_program():
     on_creation = Seq([
         Assert(Global.group_size() == Int(1)),
         Assert(Txn.sender() == dao_dapp_escrow),
-        App.globalPut(Bytes("dao_dapp_id"), dao_dapp_id),
-        App.globalPut(Bytes("dao_gov_token"), gov_token),
+        App.globalPut(DAO_DAPP_ID, dao_dapp_id),
+        App.globalPut(GOV_ASA_ID, gov_token),
         Return(Int(1))
     ])
 
     opt_in_to_gov_token = Seq([
         Assert(valid_contract_creation == Int(1)),
-        Assert(App.globalGet(Bytes("dao_gov_token")) == Txn.assets[0]),
+        Assert(App.globalGet(GOV_ASA_ID) == Txn.assets[0]),
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields({
             TxnField.type_enum: TxnType.AssetTransfer,
@@ -46,8 +49,8 @@ def rewards_approval_program():
     #TODO: Cannot be Txn.sender(), take an account from the accounts array
     #TODO: Have the user opt in to this account to collect rewards
     claim_reward = Seq([
-        Assert(App.globalGet(Bytes("dao_dapp_id")) == Txn.applications[1]),
-        Assert(App.globalGet(Bytes("dao_gov_token")) == Txn.assets[0]),
+        Assert(App.globalGet(DAO_DAPP_ID) == Txn.applications[1]),
+        Assert(App.globalGet(GOV_ASA_ID) == Txn.assets[0]),
         staked_amount := App.localGetEx(Int(0), Int(0), Bytes("staked_amount")),
         rewards_collected := App.localGetEx(Int(0), Int(0), Bytes("rewards_collected")),
         If(rewards_collected.hasValue())
@@ -71,10 +74,10 @@ def rewards_approval_program():
                 Gtxn[0].application_id() == Global.current_application_id(),
                 Gtxn[0].application_args[0] == Bytes("stake"),
                 Gtxn[1].type_enum() == TxnType.AssetTransfer,
-                Gtxn[1].xfer_asset() == App.globalGet(Bytes("dao_gov_token")),
+                Gtxn[1].xfer_asset() == App.globalGet(GOV_ASA_ID),
                 Gtxn[1].asset_amount() == Btoi(Gtxn[0].application_args[1]),
                 Gtxn[1].asset_receiver() == Global.current_application_address(),
-                Gtxn[2].application_id() == App.globalGet(Bytes("dao_dapp_id")),
+                Gtxn[2].application_id() == App.globalGet(DAO_DAPP_ID),
                 Gtxn[2].application_args[0] == Bytes("register_vote")
             )
         ),
@@ -82,7 +85,51 @@ def rewards_approval_program():
         Return(Int(1))
     ])
 
+    #TODO: Check if it is in voting period
+    #TODO: Check if user has not voted yet
     delegate = Seq([
+        voting_begin := App.globalGetEx(App.globalGet(DAO_DAPP_ID), Bytes("voting_start")),
+        voting_end := App.globalGetEx(App.globalGet(DAO_DAPP_ID), Bytes("voting_end")),
+        current_proposal := App.globalGetEx(App.globalGet(DAO_DAPP_ID), Bytes("proposal_id")),
+        If(
+            And(voting_begin.hasValue(), voting_end.hasValue())
+        )
+        .Then(
+            Assert(
+                And(
+                    Global.latest_timestamp() >= voting_begin.value(),
+                    Global.latest_timestamp() < voting_end.value()
+                )
+            ),
+            Return(Int(1))
+        ).Else(
+            Return(Int(0))
+        ),
+        proposal_last_voted := App.localGetEx(Int(0), App.globalGet(DAO_DAPP_ID), Bytes("proposal_id")),
+        If(proposal_last_voted.hasValue())
+        .Then(
+            Assert(proposal_last_voted.value() != current_proposal.value())
+        ),
+        #Txn_1 : Asset Transfer
+        #Txn_2 : Set local value
+        Assert(Global.group_size() == Int(2)),
+        Assert(
+            And(
+                Gtxn[0].type_enum() == TxnType.AssetTransfer,
+                Gtxn[0].asset_sender() == Gtxn[1].sender(),
+                Gtxn[0].asset_receiver() == Global.current_application_address(),
+                Gtxn[0].asset_amount() == Btoi(Gtxn[1].application_args[1]),
+                Gtxn[1].application_id() == Global.current_application_id(),
+                Gtxn[1].application_args[1] == Bytes("delegate")
+            )
+        ),
+        #TODO: Do we need below line?
+        App.localPut(Int(0), Bytes("delegated"), Bytes("yes")),
+        App.localPut(Int(0), Bytes("delegated_amount"), Btoi(Txn.application_args[1])),
+        App.localPut(Int(0), Bytes("delegated_to"), Txn.accounts[1]),
+        App.localPut(Int(1), Bytes("delegated_to"), Bytes("yes")),
+        App.localPut(Int(1), Bytes("delegated_by"), Txn.sender()),
+        App.localPut(Int(1), Bytes("delegated_amount"), Txn.application_args[1]),
         Return(Int(1))
     ])
 

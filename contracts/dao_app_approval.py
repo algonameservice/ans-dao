@@ -514,8 +514,6 @@ def approval_program(ARG_GOV_TOKEN):
         Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Txn.approval_program())),
         Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Txn.clear_state_program())),
         ResetProposalParams(),
-        #Need to have these transactions as atomic. If vote passed, 2 txns, else only 1
-        #if dao_update_proposal, check for these two transactions
         Return(Int(1))
     ])
 
