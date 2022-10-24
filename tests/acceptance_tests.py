@@ -141,7 +141,7 @@ def TestSocialProposal(env: Env):
 	print("Undo Delegate vote")
 	undo_delegate(env.my_algod_client, pvk_new_acct, second_acct_addr, env.gov_asa_id, env.dao_app_id)
 
-	'''
+	
 	print("Funding acct with some more ALGOs to meet raised min balance")
 	print("Attempting to vote on the social proposal")
 	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
@@ -157,7 +157,7 @@ def TestSocialProposal(env: Env):
 	DAODeclareResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, 812342)
 	print("Vote Declared successfully")
 	print("--------------------------------------------------------------------")
-	'''
+	
 	
 	
 def TestFundingProposal(env: Env):

@@ -111,6 +111,7 @@ def rewards_approval_program():
 
     #TODO: Check if it is in voting period
     #TODO: Check if user has not voted yet
+
     delegate = Seq([
         Assert(is_proposal_active() == Int(1)),
         proposal_last_voted := App.localGetEx(Int(0), App.globalGet(DAO_DAPP_ID), Bytes("proposal_id")),
@@ -136,9 +137,12 @@ def rewards_approval_program():
         App.localPut(Int(0), Bytes("delegated"), Bytes("yes")),
         App.localPut(Int(0), Bytes("delegated_amount"), Btoi(Txn.application_args[1])),
         App.localPut(Int(0), Bytes("delegated_to"), Txn.accounts[1]),
-        App.localPut(Int(1), Bytes("delegated_to"), Bytes("yes")),
+        #App.localPut(Int(1), Bytes("delegated_to"), Bytes("yes")),
         #App.localPut(Int(1), Bytes("delegated_by"), Txn.sender()),
-        App.localPut(Int(1), Bytes("delegated_amount"), Btoi(Txn.application_args[1])),
+        delegated_amount := App.localGetEx(Int(1), Int(0), Bytes("delegated_amount")),
+        If(delegated_amount.hasValue())
+        .Then(App.localPut(Int(1), Bytes("delegated_amount"), Add(delegated_amount.value(), Btoi(Txn.application_args[1]))))
+        .Else(App.localPut(Int(1), Bytes("delegated_amount"), Btoi(Txn.application_args[1]))),
         Return(Int(1))
     ])
 
@@ -150,7 +154,7 @@ def rewards_approval_program():
         .Then(
             Assert(proposal_last_voted.value() != current_proposal.value())
         ),
-        Assert(App.localGet(Int(1), Bytes("delegated_by")) == Txn.sender()),
+        Assert(App.localGet(Int(0), Bytes("delegated_to")) == Txn.accounts[1]),
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields({
             TxnField.type_enum: TxnType.AssetTransfer,
@@ -162,10 +166,7 @@ def rewards_approval_program():
         App.localPut(Int(0), Bytes("delegated"), Bytes("no")),
         App.localPut(Int(0), Bytes("delegated_amount"), Int(0)),
         App.localPut(Int(0), Bytes("delegated_to"), Bytes("none")),
-        App.localPut(Int(1), Bytes("delegated_to"), Bytes("no")),
-        App.localPut(Int(1), Bytes("delegated_by"), Bytes("none")),
         App.localPut(Int(1), Bytes("delegated_amount"), Minus(App.localGet(Int(1), Bytes("delegated_amount")), App.localGet(Int(0), Bytes("delegated_amount")))),
-        #App.localPut(Int(1), Bytes("delegated_amount"), Int(0)),
         Return(Int(1))
     ])
     
