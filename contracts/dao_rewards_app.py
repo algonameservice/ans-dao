@@ -118,10 +118,7 @@ def rewards_approval_program():
     address_owns_ans = Seq([
         domain := App.localGetEx(Int(2), App.globalGet(REGISTRY_DAPP_ID), Bytes("owner")),
         If(domain.hasValue())
-        .Then(Seq([
-            Assert(domain.value() == Txn.sender()),
-            Return(Int(1))
-        ]))
+        .Then(Assert(domain.value() == Txn.sender()))
         .Else(
             Err()
         )
@@ -148,9 +145,10 @@ def rewards_approval_program():
             )
         ),
         #TODO: Do we need below line?
-        App.localPut(Int(0), Bytes("delegated"), Bytes("yes")),
-        App.localPut(Int(0), Bytes("delegated_amount"), Btoi(Txn.application_args[1])),
-        App.localPut(Int(0), Bytes("delegated_to"), Txn.accounts[1]),
+        App.localPut(Txn.sender(), Bytes("delegated"), Bytes("yes")),
+        App.localPut(Txn.sender(), Bytes("delegated_amount"), Btoi(Txn.application_args[1])),
+        App.localPut(Txn.sender(), Bytes("delegated_to"), Txn.accounts[1]),
+        App.globalPut(Bytes("receiver"), Txn.accounts[1]),
         delegated_amount := App.localGetEx(Int(1), Int(0), Bytes("delegated_amount")),
         If(delegated_amount.hasValue())
         .Then(App.localPut(Int(1), Bytes("delegated_amount"), Add(delegated_amount.value(), Btoi(Txn.application_args[1]))))
@@ -166,7 +164,7 @@ def rewards_approval_program():
         .Then(
             Assert(proposal_last_voted.value() != current_proposal.value())
         ),
-        #Assert(App.localGet(Int(0), Bytes("delegated_to")) == Txn.accounts[1]),
+        Assert(App.localGet(Int(0), Bytes("delegated_to")) == Txn.accounts[1]),
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields({
             TxnField.type_enum: TxnType.AssetTransfer,

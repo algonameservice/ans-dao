@@ -222,6 +222,15 @@ def print_asset_holding(algodclient, account, assetid):
 			print(json.dumps(scrutinized_asset, indent=4))
 			break
 
+def print_account_info(priv_key, dao_dapp_id):
+	# note: if you have an indexer instance available it is easier to just use this
+	# response = myindexer.accounts(asset_id = assetid)
+	# then use 'account_info['created-assets'][0] to get info on the created asset
+	account_addr = account.address_from_private_key(priv_key)
+	print(account_addr)
+	print("DAO DAPP ID: {dapp} and Rewards Dapp: {rewards}".format(dapp=dao_dapp_id, rewards=get_rewards_app(dao_dapp_id)))
+		
+
 def print_created_asset(algodclient, account, assetid):    
 	# note: if you have an indexer instance available it is easier to just use this
 	# response = myindexer.accounts(asset_id = assetid)
