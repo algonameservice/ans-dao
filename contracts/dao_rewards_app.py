@@ -69,6 +69,7 @@ def rewards_approval_program():
         Return(Int(1))
     ])
 
+    
     #TODO: Cannot be Txn.sender(), take an account from the accounts array
     #TODO: Have the user opt in to this account to collect rewards
     claim_reward = Seq([
@@ -136,7 +137,7 @@ def rewards_approval_program():
         App.localPut(Int(0), Bytes("delegated_amount"), Btoi(Txn.application_args[1])),
         App.localPut(Int(0), Bytes("delegated_to"), Txn.accounts[1]),
         App.localPut(Int(1), Bytes("delegated_to"), Bytes("yes")),
-        App.localPut(Int(1), Bytes("delegated_by"), Txn.sender()),
+        #App.localPut(Int(1), Bytes("delegated_by"), Txn.sender()),
         App.localPut(Int(1), Bytes("delegated_amount"), Btoi(Txn.application_args[1])),
         Return(Int(1))
     ])

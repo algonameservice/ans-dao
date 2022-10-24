@@ -276,6 +276,8 @@ def DeployANSDAO(algod_client: algod,
 	ans_approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
 	ans_clear_state_program = compile_program(algod_client,str.encode(compiled_clear_state_program))
 
+	print(len(ans_approval_program))
+
 	h = hashlib.new('sha256')
 	h.update(ans_approval_program)
 	print(h.hexdigest())
