@@ -1,3 +1,4 @@
+from turtle import dot
 from ans_dao_helper import *
 from numpy import int64
 
@@ -122,7 +123,7 @@ def TestSocialProposal(env: Env):
 
 	#DAO_APP_ID=86039171
 	print("Attempting to add a social proposal")
-	DAOAddProposalSocial(env.my_algod_client,pvk_new_acct, 1, env.gov_asa_id, 20000000, env.dao_app_id)
+	DAOAddProposalSocial(env.my_algod_client,pvk_new_acct, 1, env.gov_asa_id, 20000000, env.dao_app_id, dot_algo_reg_app_id)
 	print_asset_holding(env.my_algod_client, new_acct_addr, env.gov_asa_id)
 	print("Successfully added social proposal")
 	print("--------------------------------------------------------------------")
@@ -136,7 +137,7 @@ def TestSocialProposal(env: Env):
 	DappOptIn(env.my_algod_client, second_acct, get_rewards_app(env.dao_app_id))
 	
 	print("Delegating vote")
-	delegate_vote(env.my_algod_client, pvk_new_acct, second_acct_addr, 1000, env.gov_asa_id, env.dao_app_id)
+	delegate_vote(env.my_algod_client, pvk_new_acct, second_acct_addr, 1000, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
 	
 	print("Undo Delegate vote")
 	undo_delegate(env.my_algod_client, pvk_new_acct, second_acct_addr, env.gov_asa_id, env.dao_app_id)

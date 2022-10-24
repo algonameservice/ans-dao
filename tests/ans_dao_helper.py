@@ -340,7 +340,8 @@ def DAOAddProposalSocial(
 	duration: int64,
 	gov_asaid: int64,
 	deposit_amt: int64,
-	dao_app_id: int64
+	dao_app_id: int64,
+	registry_app_id: int64
 	):
 
 	Grp_txns_unsign = []
@@ -374,7 +375,8 @@ def DAOAddProposalSocial(
 			duration.to_bytes(8, 'big'),
 			"https://github.com/someproposal",
 			app_program,
-			clear_program
+			clear_program,
+			registry_app_id.to_bytes(8, 'big')
 		],
 		foreign_assets=[gov_asaid]
 		#rekey_to=constants.ZERO_ADDRESS
@@ -735,7 +737,11 @@ def delegate_vote(algod_client: algod,
 	delegatee_address: str,
 	vote_amount: int64,
 	gov_asaid: int64, 
-	dao_app_id: int64):
+	dao_app_id: int64,
+	registry_app_id: int64,
+	domain: str):
+
+	lsig = anshelper.prep_name_record_logic_sig(algod_client, domain, registry_app_id)
 
 	asset_transfer_txn = transaction.AssetTransferTxn(
 		sender = account.address_from_private_key(pvk_sender),
@@ -753,9 +759,9 @@ def delegate_vote(algod_client: algod,
 			"delegate".encode("utf-8"),
 			vote_amount.to_bytes(8, 'big')
 		],
-		accounts=[delegatee_address],
+		accounts=[delegatee_address, lsig.address()],
 		foreign_assets=[gov_asaid],
-		foreign_apps=[dao_app_id],
+		foreign_apps=[dao_app_id, registry_app_id],
 		rekey_to=None
 	)
 

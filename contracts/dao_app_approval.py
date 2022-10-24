@@ -20,6 +20,7 @@ def approval_program(ARG_GOV_TOKEN):
 
     # global DAO parameters
     govtoken_asa_id = Bytes("GOV_TOKEN_ASA_ID")
+    registry_dapp_id = Bytes("REGISTRY_DAPP_ID")
     deposit = App.globalGet(Bytes("deposit"))
     #min_support = App.globalGet(Bytes("min_support"))
     #min_duration = App.globalGet(Bytes("min_duration"))
@@ -172,7 +173,7 @@ def approval_program(ARG_GOV_TOKEN):
     created_dapp_id = ScratchVar(TealType.uint64)
  
     @Subroutine(TealType.none)
-    def deploy_rewards_dapp(approval_index, clear_program_index):
+    def deploy_rewards_dapp(approval_index, clear_program_index, registry_dapp_id_index):
         return Seq([
             InnerTxnBuilder.Begin(),
             InnerTxnBuilder.SetFields({
@@ -180,7 +181,7 @@ def approval_program(ARG_GOV_TOKEN):
                 TxnField.approval_program: Txn.application_args[approval_index],
                 TxnField.clear_state_program: Txn.application_args[clear_program_index],
                 TxnField.accounts: [Global.current_application_address()],
-                TxnField.application_args: [Itob(Global.current_application_id()), Itob(App.globalGet(govtoken_asa_id))],
+                TxnField.application_args: [Itob(Global.current_application_id()), Itob(App.globalGet(govtoken_asa_id)), Txn.application_args[registry_dapp_id_index]],
                 TxnField.on_completion: OnComplete.NoOp,
                 TxnField.global_num_byte_slices: Int(32),
                 TxnField.global_num_uints: Int(32),
@@ -262,7 +263,7 @@ def approval_program(ARG_GOV_TOKEN):
         App.globalPut(bytes_proposal_status, Bytes("active")),
         App.globalPut(bytes_proposal_result, Bytes("UNKNOWN")),
         If(Gtxn[1].application_args[1] == Bytes("social"))
-        .Then(deploy_rewards_dapp(Int(4), Int(5)))
+        .Then(deploy_rewards_dapp(Int(4), Int(5), Int(6)))
         .ElseIf(Gtxn[1].application_args[1]==Bytes("funding"))
         .Then(
             Seq([ 

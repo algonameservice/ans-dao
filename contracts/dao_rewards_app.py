@@ -9,9 +9,11 @@ def rewards_approval_program():
     dao_dapp_escrow = Txn.accounts[1]
     dao_dapp_id = Btoi(Txn.application_args[0])
     gov_token = Btoi(Txn.application_args[1])
+    registry_dapp_id = Btoi(Txn.application_args[2])
 
     DAO_DAPP_ID = Bytes("dao_dapp_id")
     GOV_ASA_ID = Bytes("dao_gov_token")
+    REGISTRY_DAPP_ID = Bytes("registry_dapp_id")
 
     @Subroutine(TealType.uint64)
     def is_proposal_active():
@@ -52,6 +54,7 @@ def rewards_approval_program():
         Assert(Txn.sender() == dao_dapp_escrow),
         App.globalPut(DAO_DAPP_ID, dao_dapp_id),
         App.globalPut(GOV_ASA_ID, gov_token),
+        App.globalPut(REGISTRY_DAPP_ID, registry_dapp_id),
         Return(Int(1))
     ])
 
@@ -112,7 +115,20 @@ def rewards_approval_program():
     #TODO: Check if it is in voting period
     #TODO: Check if user has not voted yet
 
+    address_owns_ans = Seq([
+        domain := App.localGetEx(Int(2), App.globalGet(REGISTRY_DAPP_ID), Bytes("owner")),
+        If(domain.hasValue())
+        .Then(Seq([
+            Assert(domain.value() == Txn.sender()),
+            Return(Int(1))
+        ]))
+        .Else(
+            Err()
+        )
+    ])
+
     delegate = Seq([
+        address_owns_ans,
         Assert(is_proposal_active() == Int(1)),
         proposal_last_voted := App.localGetEx(Int(0), App.globalGet(DAO_DAPP_ID), Bytes("proposal_id")),
         current_proposal := App.globalGetEx(App.globalGet(DAO_DAPP_ID), Bytes("proposal_id")),
@@ -120,8 +136,6 @@ def rewards_approval_program():
         .Then(
             Assert(proposal_last_voted.value() != current_proposal.value())
         ),
-        #Txn_1 : Asset Transfer
-        #Txn_2 : Set local value
         Assert(Global.group_size() == Int(2)),
         Assert(
             And(
@@ -137,8 +151,6 @@ def rewards_approval_program():
         App.localPut(Int(0), Bytes("delegated"), Bytes("yes")),
         App.localPut(Int(0), Bytes("delegated_amount"), Btoi(Txn.application_args[1])),
         App.localPut(Int(0), Bytes("delegated_to"), Txn.accounts[1]),
-        #App.localPut(Int(1), Bytes("delegated_to"), Bytes("yes")),
-        #App.localPut(Int(1), Bytes("delegated_by"), Txn.sender()),
         delegated_amount := App.localGetEx(Int(1), Int(0), Bytes("delegated_amount")),
         If(delegated_amount.hasValue())
         .Then(App.localPut(Int(1), Bytes("delegated_amount"), Add(delegated_amount.value(), Btoi(Txn.application_args[1]))))
@@ -154,7 +166,7 @@ def rewards_approval_program():
         .Then(
             Assert(proposal_last_voted.value() != current_proposal.value())
         ),
-        Assert(App.localGet(Int(0), Bytes("delegated_to")) == Txn.accounts[1]),
+        #Assert(App.localGet(Int(0), Bytes("delegated_to")) == Txn.accounts[1]),
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields({
             TxnField.type_enum: TxnType.AssetTransfer,
