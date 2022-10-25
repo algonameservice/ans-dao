@@ -139,7 +139,7 @@ def rewards_approval_program():
                 Gtxn[0].type_enum() == TxnType.AssetTransfer,
                 
                 Gtxn[0].asset_receiver() == Global.current_application_address(),
-                
+                #Check if delegated amount == asset transfer amount
                 Gtxn[1].application_id() == Global.current_application_id(),
                 Gtxn[1].application_args[0] == Bytes("delegate")
             )
@@ -148,13 +148,15 @@ def rewards_approval_program():
         App.localPut(Txn.sender(), Bytes("delegated"), Bytes("yes")),
         App.localPut(Txn.sender(), Bytes("delegated_amount"), Btoi(Txn.application_args[1])),
         App.localPut(Txn.sender(), Bytes("delegated_to"), Txn.accounts[1]),
-        App.globalPut(Bytes("receiver"), Txn.accounts[1]),
+        
         delegated_amount := App.localGetEx(Int(1), Int(0), Bytes("delegated_amount")),
         If(delegated_amount.hasValue())
         .Then(App.localPut(Int(1), Bytes("delegated_amount"), Add(delegated_amount.value(), Btoi(Txn.application_args[1]))))
         .Else(App.localPut(Int(1), Bytes("delegated_amount"), Btoi(Txn.application_args[1]))),
         Return(Int(1))
     ])
+
+    #TODO: If proposal not active, take back tokens from claim rewards
 
     undo_delegate = Seq([
         Assert(is_proposal_active() == Int(1)),
@@ -173,9 +175,9 @@ def rewards_approval_program():
             TxnField.xfer_asset: Txn.assets[0]
         }),
         InnerTxnBuilder.Submit(),
-        App.localPut(Int(0), Bytes("delegated"), Bytes("no")),
-        App.localPut(Int(0), Bytes("delegated_amount"), Int(0)),
-        App.localPut(Int(0), Bytes("delegated_to"), Bytes("none")),
+        App.localDel(Int(0), Bytes("delegated")),
+        App.localDel(Int(0), Bytes("delegated_amount")),
+        App.localDel(Int(0), Bytes("delegated_to")),
         App.localPut(Int(1), Bytes("delegated_amount"), Minus(App.localGet(Int(1), Bytes("delegated_amount")), App.localGet(Int(0), Bytes("delegated_amount")))),
         Return(Int(1))
     ])

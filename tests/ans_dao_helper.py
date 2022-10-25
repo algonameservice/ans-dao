@@ -185,7 +185,7 @@ def ASAOptIn(algod_client_in, pk_account, asaid):
 def TransferASA(algod_client_in, amount, pk_sender, acct_receiver, asaid):
 	acct_sender = account.address_from_private_key(pk_sender)
 	
-	assert(IsOptedInASA(algod_client_in, acct_receiver, asaid))
+	#assert(IsOptedInASA(algod_client_in, acct_receiver, asaid))
 	
 	# Use the AssetTransferTxn class to transfer assets and opt-in
 	txn = transaction.AssetTransferTxn(
@@ -300,7 +300,8 @@ def DeployANSDAO(algod_client: algod,
 		global_schema=global_schema,
 		local_schema=local_schema,
 		app_args=appargs,
-		foreign_assets=[gov_asaid]
+		foreign_assets=[gov_asaid],
+		extra_pages=1
 	)
 	
 	# sign transaction
@@ -691,6 +692,34 @@ def DAORegisterVote(
 		txn_id = Grp_txns_signed[1].transaction.get_txid()
 		algod_client.send_transactions(Grp_txns_signed)
 		wait_for_confirmation(algod_client, txn_id)
+	except Exception as err:
+		print("There is some error")
+		print(err)
+
+def VoteAsDelegate(
+	algod_client: algod,
+	choice: str,
+	pvk_sender: str,
+	dao_app_id: int64,
+	registry_dapp_id: int64
+	):
+
+	txn_register_vote = transaction.ApplicationNoOpTxn(
+		sender=account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		index=dao_app_id,
+		app_args=[
+			"register_vote".encode("utf-8"),
+			choice.encode("utf-8"),
+		],
+		foreign_apps=[registry_dapp_id, get_rewards_app(dao_app_id)],
+		rekey_to=None
+	)
+
+	try:
+		txnid = txn_register_vote.get_txid()
+		algod_client.send_transaction(txn_register_vote.sign(pvk_sender))
+		wait_for_confirmation(algod_client, txnid)
 	except Exception as err:
 		print("There is some error")
 		print(err)

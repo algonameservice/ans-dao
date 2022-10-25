@@ -330,51 +330,73 @@ def approval_program(ARG_GOV_TOKEN):
     #TODO: Check domain registration when delegating
     #TODO: If voting as a delegate, only register vote
     #TODO: Do not allow voting if delegated
+
+    vote_amount = ScratchVar(TealType.uint64)
     
     vote = Seq([
         #Assert(Txn.applications[2] == App.globalGet(Bytes("current_rewards_app_id"))),
-        rewards_dapp_escrow := AppParam.address(Txn.applications[2]),
-        Assert(Global.group_size() == Int(3)),
-        Assert(
-            And(
-                Gtxn[0].application_id() == App.globalGet(Bytes("current_rewards_app_id")),
-                Gtxn[0].application_args[0] == Bytes("stake"),
-                Gtxn[1].type_enum() == TxnType.AssetTransfer,
-                Gtxn[1].xfer_asset() == App.globalGet(govtoken_asa_id),
-                Gtxn[1].asset_amount() == Btoi(Gtxn[0].application_args[1]),
-                Gtxn[1].asset_receiver() == rewards_dapp_escrow.value(),
-                Gtxn[2].application_id() == Global.current_application_id(),
-                Gtxn[2].application_args[0] == Bytes("register_vote")
-            )
-        ),
-        address_owns_ans,
-        store_voters_token_balance(Txn.sender(),App.globalGet(govtoken_asa_id)),
-        get_users_last_proposal(),
-        Assert(
-            And(
-                App.optedIn(Txn.sender(),App.id()),
-                # voting_start <= now <= voting_end
-                App.globalGet(bytes_voting_start) <= Global.latest_timestamp(),
-                Global.latest_timestamp() <= App.globalGet(bytes_voting_end),
-                Txn.assets[0]==App.globalGet(govtoken_asa_id),
-                acct_balance_asa.load()>Int(0),
-                # Sender.deposit >= 0 (i.e user "deposited" his votes using deposit_vote_token)
-                Or(
-                    users_last_proposal.load() == Int(0),
-                    users_last_proposal.load() != proposal_id_global
+        get_delegate_status := App.localGetEx(Txn.sender(), Int(2), Bytes("delegated")),
+        If(get_delegate_status.hasValue()).
+        Then(Err()),
+        delegated_amount := App.localGetEx(Txn.sender(), Int(2), Bytes("delegated_amount")),
+        If(
+            delegated_amount.hasValue(),
+        ).Then(Seq([
+            Assert(
+                And(
+                    App.globalGet(bytes_voting_start) <= Global.latest_timestamp(),
+                    delegated_amount.value() > Int(0),
+                    Or(
+                        users_last_proposal.load() == Int(0),
+                        users_last_proposal.load() != proposal_id_global
+                    )
                 )
-            )
-        ),
-    
+            ),
+            vote_amount.store(delegated_amount.value())
+        ])).Else(Seq([
+            rewards_dapp_escrow := AppParam.address(Txn.applications[2]),
+            Assert(Global.group_size() == Int(3)),
+            Assert(
+                And(
+                    Gtxn[0].application_id() == App.globalGet(Bytes("current_rewards_app_id")),
+                    Gtxn[0].application_args[0] == Bytes("stake"),
+                    Gtxn[1].type_enum() == TxnType.AssetTransfer,
+                    Gtxn[1].xfer_asset() == App.globalGet(govtoken_asa_id),
+                    Gtxn[1].asset_amount() == Btoi(Gtxn[0].application_args[1]),
+                    Gtxn[1].asset_receiver() == rewards_dapp_escrow.value(),
+                    Gtxn[2].application_id() == Global.current_application_id(),
+                    Gtxn[2].application_args[0] == Bytes("register_vote")
+                )
+            ),
+            address_owns_ans,
+            store_voters_token_balance(Txn.sender(),App.globalGet(govtoken_asa_id)),
+            get_users_last_proposal(),
+            Assert(
+                And(
+                    App.optedIn(Txn.sender(),App.id()),
+                    # voting_start <= now <= voting_end
+                    App.globalGet(bytes_voting_start) <= Global.latest_timestamp(),
+                    #Global.latest_timestamp() <= App.globalGet(bytes_voting_end),
+                    Txn.assets[0]==App.globalGet(govtoken_asa_id),
+                    acct_balance_asa.load()>Int(0),
+                    # Sender.deposit >= 0 (i.e user "deposited" his votes using deposit_vote_token)
+                    Or(
+                        users_last_proposal.load() == Int(0),
+                        users_last_proposal.load() != proposal_id_global
+                    )
+                )
+            ),
+            vote_amount.store(Btoi(Gtxn[0].application_args[1]))
+        ])),
         If(Txn.application_args[1]==bytes_yes)
         .Then(
-            App.globalPut(bytes_votecount_yes, Add(App.globalGet(bytes_votecount_yes),Int(1))),
+            App.globalPut(bytes_votecount_yes, Add(App.globalGet(bytes_votecount_yes),vote_amount.load())),
         ).ElseIf(Txn.application_args[1]==bytes_no)
         .Then(
-            App.globalPut(bytes_votecount_no, Add(App.globalGet(bytes_votecount_no),Int(1)))
+            App.globalPut(bytes_votecount_no, Add(App.globalGet(bytes_votecount_no),vote_amount.load()))
         ).ElseIf(Txn.application_args[1]==bytes_abstain)
         .Then(
-            App.globalPut(bytes_votecount_abstain, Add(App.globalGet(bytes_votecount_abstain),Int(1)))
+            App.globalPut(bytes_votecount_abstain, Add(App.globalGet(bytes_votecount_abstain),vote_amount.load()))
         ).Else(
             Err()
         ),
