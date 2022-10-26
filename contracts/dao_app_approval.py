@@ -334,7 +334,7 @@ def approval_program(ARG_GOV_TOKEN):
     vote_amount = ScratchVar(TealType.uint64)
     
     vote = Seq([
-        #Assert(Txn.applications[2] == App.globalGet(Bytes("current_rewards_app_id"))),
+        Assert(Txn.applications[2] == App.globalGet(Bytes("current_rewards_app_id"))),
         get_delegate_status := App.localGetEx(Txn.sender(), Int(2), Bytes("delegated")),
         If(get_delegate_status.hasValue()).
         Then(Err()),

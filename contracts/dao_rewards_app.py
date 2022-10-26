@@ -82,6 +82,7 @@ def rewards_approval_program():
         rewards_collected := App.localGetEx(Int(0), Int(0), Bytes("rewards_collected")),
         If(rewards_collected.hasValue())
         .Then(Assert(rewards_collected.value() == Bytes("no"))),
+        Assert(staked_amount.value() > Int(0)),
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields({
             TxnField.type_enum: TxnType.AssetTransfer,
@@ -145,6 +146,7 @@ def rewards_approval_program():
             )
         ),
         #TODO: Do we need below line?
+        App.localPut(Txn.sender(), Bytes("staked_amount"), Btoi(Txn.application_args[1])),
         App.localPut(Txn.sender(), Bytes("delegated"), Bytes("yes")),
         App.localPut(Txn.sender(), Bytes("delegated_amount"), Btoi(Txn.application_args[1])),
         App.localPut(Txn.sender(), Bytes("delegated_to"), Txn.accounts[1]),
@@ -175,6 +177,7 @@ def rewards_approval_program():
             TxnField.xfer_asset: Txn.assets[0]
         }),
         InnerTxnBuilder.Submit(),
+        App.localDel(Int(0), Bytes("staked_amount")),
         App.localDel(Int(0), Bytes("delegated")),
         App.localDel(Int(0), Bytes("delegated_amount")),
         App.localDel(Int(0), Bytes("delegated_to")),

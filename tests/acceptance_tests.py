@@ -143,11 +143,12 @@ def TestSocialProposal(env: Env):
 	print("Successfully voted as delegate")
 	
 	print("Funding acct with some more ALGOs to meet raised min balance")
+	'''
 	print("Attempting to vote on the social proposal")
 	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
 	print("Successfully registered vote")
 	print("--------------------------------------------------------------------")
-
+	'''
 	#AddRandomVotesFromRandomAccounts(env, 2)
 	#time.sleep(100)
 	print("Collecting rewards for voting")
