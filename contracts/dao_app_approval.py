@@ -105,6 +105,7 @@ def approval_program(ARG_GOV_TOKEN):
         App.globalPut(bytes_proposal_count, Int(0)),
         ResetProposalParams(),
         App.globalPut(bytes_proposal_id,Int(31420)),
+        App.globalPut(Bytes("program_hash"), Sha512_256(Txn.approval_program())),
         Return(Int(1))
     ])
 
@@ -288,6 +289,7 @@ def approval_program(ARG_GOV_TOKEN):
                 App.globalPut(bytes_reg_app_id_to_update,Txn.applications[1]),
                 App.globalPut(bytes_proposal_funding_amt_ans, Btoi(Gtxn[1].application_args[5])),
                 App.globalPut(bytes_funding_recipient, Gtxn[1].accounts[1]),
+                deploy_rewards_dapp(Int(6), Int(7), Int(8))
                 
         ])
         ).ElseIf(

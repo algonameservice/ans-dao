@@ -31,7 +31,7 @@ from pyteal import *
 from numpy import int64
 import ans_helper as anshelper
 import hashlib
-
+from Crypto.Hash import SHA512
 import sys
 #sys.path.append('../')
 
@@ -245,6 +245,23 @@ def print_created_asset(algodclient, account, assetid):
 			print(json.dumps(my_account_info['params'], indent=4))
 			break
 
+def test_compile(algod_client: algod, gov_asaid: int64):
+	#h = hashlib.new('sha512')
+	compiled_approval_program = compileTeal(approval_program(gov_asaid), Mode.Application, version=6)
+	compiled_clear_state_program = compileTeal(clear_state_program(), Mode.Application,version=6)
+
+	#ans_approval_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_approval.teal'))
+	#ans_clear_state_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_clear_state.teal'))
+
+	ans_approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
+	ans_clear_state_program = compile_program(algod_client,str.encode(compiled_clear_state_program))
+
+	hashObject = SHA512.new(truncate='256')
+	hashObject.update(ans_approval_program)
+	digest = hashObject.hexdigest()
+
+	print(digest)
+
 def DeployANSDAO(algod_client: algod,
 	min_support: int64,
 	min_duration: int64,
@@ -287,7 +304,7 @@ def DeployANSDAO(algod_client: algod,
 
 	print(len(ans_approval_program))
 
-	h = hashlib.new('sha256')
+	h = hashlib.new('sha512')
 	h.update(ans_approval_program)
 	print(h.hexdigest())
 	
@@ -433,19 +450,29 @@ def DAOAddProposalFunding(
 	
 	Grp_txns_unsign.append(deposit_txn)
 
+	compiled_approval_program = anshelper.compileTeal(rewards_approval_program(), Mode.Application,version=6)
+	compiled_clear_state_program = anshelper.compileTeal(rewards_clear_state_program(), Mode.Application,version=6)
+
+	app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))
+	clear_program = anshelper.compile_program(algod_client, str.encode(compiled_clear_state_program))
+
 	txn_add_proposal = transaction.ApplicationNoOpTxn(
 		sender=account.address_from_private_key(pk_sender),
 		sp=algod_client.suggested_params(),
 		index=dao_app_id,
 		foreign_apps=[reg_app_id],
 		accounts=[addr_recipient, logic.get_application_address(reg_app_id)],
+		foreign_assets=[gov_asaid],
 		app_args=[
 			"add_proposal".encode("utf-8"),
 			"funding".encode("utf-8"),
 			duration.to_bytes(8, 'big'),
 			"https://github.com/someproposal".encode("utf-8"),
 			amt_algos.to_bytes(8, 'big'),
-			amt_ans.to_bytes(8, 'big')
+			amt_ans.to_bytes(8, 'big'),
+			app_program,
+			clear_program,
+			reg_app_id.to_bytes(8, 'big')
 		]
 		#rekey_to=constants.ZERO_ADDRESS
 	)
