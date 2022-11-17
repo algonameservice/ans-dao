@@ -201,6 +201,6 @@ def rewards_approval_program():
 
     return program
 
-'''
-        
-        '''
+with open('contract_approval.teal', 'w') as f:
+    compiled = compileTeal(rewards_approval_program(), Mode.Application, version=6)
+    f.write(compiled)
