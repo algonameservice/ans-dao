@@ -436,8 +436,8 @@ if __name__ == "__main__":
 
 	#TestDaoUpdateProposal(ans_dao_env)
 
-	#TestSocialProposal(ans_dao_env)
+	TestSocialProposal(ans_dao_env)
 
-	TestFundingProposal(ans_dao_env)	
+	#TestFundingProposal(ans_dao_env)	
 
 	#TestUpdateRegProposal(ans_dao_env)

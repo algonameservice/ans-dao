@@ -31,7 +31,6 @@ from pyteal import *
 from numpy import int64
 import ans_helper as anshelper
 import hashlib
-from Crypto.Hash import SHA512
 import sys
 #sys.path.append('../')
 
@@ -256,11 +255,6 @@ def test_compile(algod_client: algod, gov_asaid: int64):
 	ans_approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
 	ans_clear_state_program = compile_program(algod_client,str.encode(compiled_clear_state_program))
 
-	hashObject = SHA512.new(truncate='256')
-	hashObject.update(ans_approval_program)
-	digest = hashObject.hexdigest()
-
-	print(digest)
 
 def DeployANSDAO(algod_client: algod,
 	min_support: int64,
