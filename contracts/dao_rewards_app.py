@@ -126,6 +126,9 @@ def rewards_approval_program():
     ])
 
     delegate = Seq([
+        is_already_delegated := App.localGetEx(Int(0), Int(0), Bytes("delegated")),
+        If(is_already_delegated.hasValue())
+        .Then(Return(Int(0))),
         address_owns_ans,
         Assert(is_proposal_active() == Int(1)),
         proposal_last_voted := App.localGetEx(Int(0), App.globalGet(DAO_DAPP_ID), Bytes("proposal_id")),
@@ -138,9 +141,8 @@ def rewards_approval_program():
         Assert(
             And(
                 Gtxn[0].type_enum() == TxnType.AssetTransfer,
-                
                 Gtxn[0].asset_receiver() == Global.current_application_address(),
-                #Check if delegated amount == asset transfer amount
+                Gtxn[0].asset_amount() == Btoi(Gtxn[1].application_args[1]),
                 Gtxn[1].application_id() == Global.current_application_id(),
                 Gtxn[1].application_args[0] == Bytes("delegate")
             )

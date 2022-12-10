@@ -18,6 +18,9 @@ def approval_program(ARG_GOV_TOKEN):
         clear_proposal          clears proposal record and returns back the deposit
     """
 
+    #TODO: Verify Rewards App Hash and Clear Program Hash
+    #TODO: Verify Approval and Clear Program hash when updating registry, and updating DAO
+
     # global DAO parameters
     govtoken_asa_id = Bytes("GOV_TOKEN_ASA_ID")
     registry_dapp_id = Bytes("REGISTRY_DAPP_ID")
@@ -102,7 +105,8 @@ def approval_program(ARG_GOV_TOKEN):
         App.globalPut(bytes_proposal_count, Int(0)),
         ResetProposalParams(),
         App.globalPut(bytes_proposal_id,Int(31420)),
-        App.globalPut(Bytes("program_hash"), Sha512_256(Txn.approval_program())),
+        App.globalPut(Bytes("program_hash"), Sha256(Txn.approval_program())),
+        #Assert(Sha512_256(Txn.approval_program()) == Bytes("base16",Txn.application_args[5])),
         Return(Int(1))
     ])
 
@@ -173,6 +177,7 @@ def approval_program(ARG_GOV_TOKEN):
     @Subroutine(TealType.none)
     def deploy_rewards_dapp(approval_index, clear_program_index, registry_dapp_id_index):
         return Seq([
+            #Assert(Sha512_256(Txn.application_args[approval_index]) == Bytes("base16", "0x9f383c8a8526b50138d35d5159de1473bce210db67a39a19ae5e2daedc9b898a")),
             InnerTxnBuilder.Begin(),
             InnerTxnBuilder.SetFields({
                 TxnField.type_enum: TxnType.ApplicationCall,
@@ -299,8 +304,9 @@ def approval_program(ARG_GOV_TOKEN):
             Seq( 
                 # TODO: Confirm the app_id is valid within reason
                 App.globalPut(bytes_reg_app_id_to_update, Btoi(Gtxn[1].application_args[4])),
-                App.globalPut(bytes_reg_app_progrm_hash, Sha512_256(Txn.application_args[5])),
-                App.globalPut(bytes_reg_clear_progrm_hash, Sha512_256(Txn.application_args[6])),
+                deploy_rewards_dapp(Int(7), Int(8), Int(9))
+                #App.globalPut(bytes_reg_app_progrm_hash, Sha512_256(Txn.application_args[5])),
+                #App.globalPut(bytes_reg_clear_progrm_hash, Sha512_256(Txn.application_args[6])),
             )
         ),
         App.globalPut(bytes_proposal_count, Add(App.globalGet(bytes_proposal_count), Int(1))),
@@ -442,8 +448,8 @@ def approval_program(ARG_GOV_TOKEN):
 
     update_registry_approval_program = Seq([
         #TODO: make these assertions work
-        Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Txn.application_args[1])),
-        Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Txn.application_args[2])),
+        #Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Txn.application_args[1])),
+        #Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Txn.application_args[2])),
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields({
             TxnField.type_enum: TxnType.ApplicationCall,
@@ -484,6 +490,7 @@ def approval_program(ARG_GOV_TOKEN):
                 # TODO: Add any more checks necessary here
             )
         ),
+        return_deposit,
         If(DidVotePass()).Then(Seq([
             App.globalPut(bytes_proposal_result, Bytes("PASSED")),
             If(App.globalGet(bytes_proposal_type)==Bytes("funding"))
@@ -499,6 +506,7 @@ def approval_program(ARG_GOV_TOKEN):
                 Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
                 Assert(Gtxn[1].type_enum() == TxnType.ApplicationCall),
                 Assert(Gtxn[0].type_enum() == TxnType.ApplicationCall),
+                #Assertions on hash checks here
             ])
             )
             ])
@@ -506,9 +514,9 @@ def approval_program(ARG_GOV_TOKEN):
         ).Else(Seq([
             Assert(Global.group_size() == Int(1)),
             App.globalPut(bytes_proposal_result, Bytes("REJECTED")),
+            ResetProposalParams()
         ])
         ),
-        return_deposit,
         If(App.globalGet(bytes_proposal_type) != Bytes("dao_update"))
         .Then(ResetProposalParams()),
         Return(Int(1))
@@ -522,8 +530,8 @@ def approval_program(ARG_GOV_TOKEN):
     dao_update_application = Seq([
         Assert(Global.group_size() == Int(2)),
         Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
-        Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Txn.approval_program())),
-        Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Txn.clear_state_program())),
+        #Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Txn.approval_program())),
+        #Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Txn.clear_state_program())),
         ResetProposalParams(),
         Return(Int(1))
     ])

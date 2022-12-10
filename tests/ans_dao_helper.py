@@ -244,16 +244,18 @@ def print_created_asset(algodclient, account, assetid):
 			print(json.dumps(my_account_info['params'], indent=4))
 			break
 
-def test_compile(algod_client: algod, gov_asaid: int64):
-	#h = hashlib.new('sha512')
-	compiled_approval_program = compileTeal(approval_program(gov_asaid), Mode.Application, version=6)
-	compiled_clear_state_program = compileTeal(clear_state_program(), Mode.Application,version=6)
+def test_compile(algod_client: algod):
+	compiled_approval_program = compileTeal(rewards_approval_program(), Mode.Application, version=6)
+	compiled_clear_state_program = compileTeal(rewards_clear_state_program(), Mode.Application,version=6)
 
 	#ans_approval_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_approval.teal'))
 	#ans_clear_state_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_clear_state.teal'))
+	
 
-	ans_approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
-	ans_clear_state_program = compile_program(algod_client,str.encode(compiled_clear_state_program))
+	approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
+	clear_state_program = compile_program(algod_client,str.encode(compiled_clear_state_program))
+
+	print(hashlib.sha256(approval_program).hexdigest())
 
 
 def DeployANSDAO(algod_client: algod,
@@ -279,14 +281,6 @@ def DeployANSDAO(algod_client: algod,
 	#min_support = 20000#00
 	#min_duration = 2 # days
 	max_duration = 60 # days
-	appargs = [
-		min_deposit.to_bytes(8, 'big'), # min deposit
-		min_support.to_bytes(8, 'big'), # min support
-		min_duration.to_bytes(8, 'big'), # min duration
-		max_duration.to_bytes(8, 'big'), # max duration
-		"https://ansdao.org".encode('utf-8') #url
-	]
-	
 	compiled_approval_program = compileTeal(approval_program(gov_asaid), Mode.Application, version=6)
 	compiled_clear_state_program = compileTeal(clear_state_program(), Mode.Application,version=6)
 
@@ -298,9 +292,21 @@ def DeployANSDAO(algod_client: algod,
 
 	print(len(ans_approval_program))
 
-	h = hashlib.new('sha512')
-	h.update(ans_approval_program)
-	print(h.hexdigest())
+	
+	#h.update(ans_approval_program)
+	hash = hashlib.sha256(ans_approval_program).hexdigest()
+	print(hash)
+
+	appargs = [
+		min_deposit.to_bytes(8, 'big'), # min deposit
+		min_support.to_bytes(8, 'big'), # min support
+		min_duration.to_bytes(8, 'big'), # min duration
+		max_duration.to_bytes(8, 'big'), # max duration
+		"https://ansdao.org".encode('utf-8'), #url
+		hash.encode('utf-8')
+	]
+	
+	
 	
 	txn = transaction.ApplicationCreateTxn(
 		sender=acct_owner,

@@ -13,15 +13,15 @@ class Env(object):
 
 		self._my_algod_client = algod_client
 		self._funding_addr, self._funding_acct_mnemonic = GetFundingAccount(self.my_algod_client)
-
+		test_compile(algod_client)
 		
 		print("Deploying DAO APP")
 		self._GOV_ASA_ID = DeployANSToken(self.my_algod_client, self.funding_acct_mnemonic)
 		
 		self._DAO_APP_ID = DeployANSDAO(self.my_algod_client, 200000, 1, self._funding_acct_mnemonic,self._GOV_ASA_ID)
+		
 		print("Deployed ANS DAO APP with APP-id "+str(self._DAO_APP_ID))
-		#test_compile(algod_client, self._GOV_ASA_ID)
-
+		
 		acct_dao_escrow = logic.get_application_address(self._DAO_APP_ID)
 		print("DAO Escrow add: "+acct_dao_escrow)
 		print("--------------------------------------------------------------------")
@@ -36,6 +36,7 @@ class Env(object):
 		print("Successfully opted DAO APP in to GOV ASA")
 		print("--------------------------------------------------------------------")
 		TransferASA(self.my_algod_client,20001000,mnemonic.to_private_key(self.funding_acct_mnemonic),logic.get_application_address(self._DAO_APP_ID),self._GOV_ASA_ID)
+		
 		
 	@property
 	def my_algod_client(self):
@@ -131,7 +132,7 @@ def TestSocialProposal(env: Env):
 	print_asset_holding(env.my_algod_client, new_acct_addr, env.gov_asa_id)
 	print("Successfully added social proposal")
 	print("--------------------------------------------------------------------")
-
+	
 	print("First account opting in to DAO Dao")
 	DappOptIn(env.my_algod_client, pvk_new_acct, env.dao_app_id)
 	DappOptIn(env.my_algod_client, pvk_new_acct, get_rewards_app(env.dao_app_id))
@@ -140,15 +141,16 @@ def TestSocialProposal(env: Env):
 	DappOptIn(env.my_algod_client, second_acct, env.dao_app_id)
 	DappOptIn(env.my_algod_client, second_acct, get_rewards_app(env.dao_app_id))
 	
-	'''
-	print("Delegating vote")
-	delegate_vote(env.my_algod_client, pvk_new_acct, second_acct_addr, 1000, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
+	
+	#print("Delegating vote")
+	#delegate_vote(env.my_algod_client, pvk_new_acct, second_acct_addr, 1000, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
+	
 	#undo_delegate(env.my_algod_client, pvk_new_acct, second_acct_addr, env.gov_asa_id, env.dao_app_id)
 	
-	print("Voting as delegate")
-	VoteAsDelegate(env.my_algod_client, "yes", second_acct, env.dao_app_id, dot_algo_reg_app_id)
-	print("Successfully voted as delegate")
-	'''
+	#print("Voting as delegate")
+	#VoteAsDelegate(env.my_algod_client, "yes", second_acct, env.dao_app_id, dot_algo_reg_app_id)
+	#print("Successfully voted as delegate")
+	
 	
 	print("Funding acct with some more ALGOs to meet raised min balance")
 	
