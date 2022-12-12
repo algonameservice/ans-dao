@@ -126,6 +126,13 @@ def rewards_approval_program():
     ])
 
     delegate = Seq([
+        is_a_delegate := App.localGetEx(Int(1), Int(0), Bytes("is_a_delegate")),
+        Assert(
+            And(
+                is_a_delegate.hasValue(),
+                is_a_delegate.value() == Bytes("yes")
+            )
+        ),
         is_already_delegated := App.localGetEx(Int(0), Int(0), Bytes("delegated")),
         If(is_already_delegated.hasValue())
         .Then(Return(Int(0))),
@@ -160,8 +167,6 @@ def rewards_approval_program():
         Return(Int(1))
     ])
 
-    #TODO: If proposal not active, take back tokens from claim rewards
-
     undo_delegate = Seq([
         Assert(is_proposal_active() == Int(1)),
         proposal_last_voted := App.localGetEx(Int(1), App.globalGet(DAO_DAPP_ID), Bytes("proposal_id")),
@@ -186,6 +191,22 @@ def rewards_approval_program():
         App.localPut(Int(1), Bytes("delegated_amount"), Minus(App.localGet(Int(1), Bytes("delegated_amount")), App.localGet(Int(0), Bytes("delegated_amount")))),
         Return(Int(1))
     ])
+
+    change_delegate_status = Seq([
+        Assert(is_proposal_active() == Int(1)),
+        is_a_delegate := App.localGetEx(Int(0), Int(0), Bytes("is_a_delegate")),
+        If(is_a_delegate.hasValue())
+        .Then(
+            Seq([
+                If(is_a_delegate.value() == Bytes("yes"))
+                .Then(App.localPut(Int(0), Bytes("is_a_delegate"), Bytes("no")))
+                .ElseIf(is_a_delegate.value() == Bytes("no"))
+                .Then(App.localPut(Int(0), Bytes("is_a_delegate"), Bytes("yes")))
+            ])
+        )
+        .Else(App.localPut(Int(0), Bytes("is_a_delegate"), Bytes("yes"))),
+        Return(Int(1))
+    ])
     
     program = Cond(
         # Verfies that the application_id is 0, jumps to on_initialize.
@@ -196,9 +217,8 @@ def rewards_approval_program():
         [Txn.application_args[0] == Bytes("claim_reward"), claim_reward],
         [Txn.application_args[0] == Bytes("stake"), stake],
         [Txn.application_args[0] == Bytes("delegate"), delegate],
+        [Txn.application_args[0] == Bytes("change_delegate_status"), change_delegate_status],
         [Txn.application_args[0] == Bytes("undo_delegate"), undo_delegate],
-        
-        
     )
 
     return program

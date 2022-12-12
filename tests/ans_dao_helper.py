@@ -797,6 +797,33 @@ def get_rewards_app(dao_app_id):
 			rewards_app = key_value['value']['uint']
 			return rewards_app
 
+def accept_delegate(algod_client: algod,
+	pvk_sender: str,
+	dao_app_id: int64,
+	gov_asaid: int64
+	):
+
+	accept_delegate_vote_txn = transaction.ApplicationNoOpTxn(
+		sender=account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		index=get_rewards_app(dao_app_id),
+		app_args=[
+			"change_delegate_status".encode("utf-8")
+		],
+		foreign_assets=[gov_asaid],
+		foreign_apps=[dao_app_id],
+		rekey_to=None
+	)
+	
+	sign_txn = accept_delegate_vote_txn.sign(pvk_sender)
+
+	try:
+		txn_id = accept_delegate_vote_txn.get_txid()
+		algod_client.send_transaction(sign_txn)
+		wait_for_confirmation(algod_client, txn_id)
+	except Exception as err:
+		print(err)
+
 def delegate_vote(algod_client: algod,
 	pvk_sender: str,
 	delegatee_address: str,

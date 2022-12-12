@@ -141,24 +141,25 @@ def TestSocialProposal(env: Env):
 	DappOptIn(env.my_algod_client, second_acct, env.dao_app_id)
 	DappOptIn(env.my_algod_client, second_acct, get_rewards_app(env.dao_app_id))
 	
-	
-	#print("Delegating vote")
-	#delegate_vote(env.my_algod_client, pvk_new_acct, second_acct_addr, 1000, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
+	print('accepting to be a delegate')
+	accept_delegate(env.my_algod_client, second_acct, env.dao_app_id, env.gov_asa_id)
+	print("Delegating vote")
+	delegate_vote(env.my_algod_client, pvk_new_acct, second_acct_addr, 1000, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
 	
 	#undo_delegate(env.my_algod_client, pvk_new_acct, second_acct_addr, env.gov_asa_id, env.dao_app_id)
 	
-	#print("Voting as delegate")
-	#VoteAsDelegate(env.my_algod_client, "yes", second_acct, env.dao_app_id, dot_algo_reg_app_id)
-	#print("Successfully voted as delegate")
+	print("Voting as delegate")
+	VoteAsDelegate(env.my_algod_client, "yes", second_acct, env.dao_app_id, dot_algo_reg_app_id)
+	print("Successfully voted as delegate")
 	
 	
 	print("Funding acct with some more ALGOs to meet raised min balance")
-	
+	'''
 	print("Attempting to vote on the social proposal")
 	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
 	print("Successfully registered vote")
 	print("--------------------------------------------------------------------")
-	
+	'''
 	#AddRandomVotesFromRandomAccounts(env, 2)
 	#time.sleep(100)
 	print("Collecting rewards for voting")
