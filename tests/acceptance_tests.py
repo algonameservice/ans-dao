@@ -16,8 +16,8 @@ class Env(object):
 		
 		print("Deploying DAO APP")
 		self._GOV_ASA_ID = DeployANSToken(self.my_algod_client, self.funding_acct_mnemonic)
-		
-		
+		test_compile(algod_client, self._GOV_ASA_ID)
+		'''
 		self._DAO_APP_ID = DeployANSDAO(self.my_algod_client, 200000, 1, self._funding_acct_mnemonic,self._GOV_ASA_ID)
 		print(self._DAO_APP_ID)
 		
@@ -37,7 +37,7 @@ class Env(object):
 		print("Successfully opted DAO APP in to GOV ASA")
 		print("--------------------------------------------------------------------")
 		TransferASA(self.my_algod_client,20001000,mnemonic.to_private_key(self.funding_acct_mnemonic),logic.get_application_address(self._DAO_APP_ID),self._GOV_ASA_ID)
-		
+		'''
 		
 	@property
 	def my_algod_client(self):
@@ -440,7 +440,7 @@ if __name__ == "__main__":
 
 	#TestDaoUpdateProposal(ans_dao_env)
 
-	TestSocialProposal(ans_dao_env)
+	#TestSocialProposal(ans_dao_env)
 
 	#TestFundingProposal(ans_dao_env)	
 

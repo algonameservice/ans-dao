@@ -48,6 +48,7 @@ import base64
 import datetime,time
 # Import PureStake API
 import mysecrets
+from base64 import b64encode, b64decode
 
 def SetupClient(network):
 
@@ -255,7 +256,12 @@ def test_compile(algod_client: algod, gov_asaid=0):
 
 	hash = hashlib.new('sha512_256')
 	hash.update(compiled_approval_program)
-	print(hash.hexdigest())
+	digest = hash.hexdigest()
+	print(digest)
+	hash.update(compiled_clear_state_program)
+	b64 = b64encode(bytes.fromhex(digest)).decode()
+	print(b64)
+
 	return hash.hexdigest()
 
 def DeployANSDAO(algod_client: algod,
@@ -575,8 +581,15 @@ def DAOAddUpdateProposal(
 	compiled_approval_program = anshelper.compileTeal(anshelper.approval_program(logic.get_application_address(dao_app_id)), Mode.Application,version=6)
 	compiled_clear_state_program = anshelper.compileTeal(anshelper.clear_state_program(), Mode.Application,version=6)
 
-	ans_app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))
-	ans_clear_program = anshelper.compile_program(algod_client, str.encode(compiled_clear_state_program))
+	app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))
+	clear_program = anshelper.compile_program(algod_client, str.encode(compiled_clear_state_program))
+
+	hash = hashlib.new('sha512_256')
+	hash.update(app_program)
+	digest = hash.hexdigest()
+	b64_approval = b64encode(bytes.fromhex(digest)).decode()
+	hash.update(clear_program)
+	b64_clear = b64encode(bytes.fromhex(digest)).decode()
 
 	txn_add_proposal = transaction.ApplicationNoOpTxn(
 		sender=account.address_from_private_key(pk_sender),
@@ -591,7 +604,9 @@ def DAOAddUpdateProposal(
 			"https://github.com/someproposal".encode("utf-8"),
 			dao_app_id.to_bytes(8, 'big'),
 			ans_app_program,
-			ans_clear_program
+			ans_clear_program,
+			b64_approval,
+			b64_clear
 		],
 		#rekey_to=constants.ZERO_ADDRESS
 	)

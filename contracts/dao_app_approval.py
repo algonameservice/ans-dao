@@ -47,8 +47,8 @@ def approval_program(ARG_GOV_TOKEN):
     bytes_funding_recipient = Bytes("funding_recipient")
     bytes_reg_app_id_to_update = Bytes("reg_app_id_to_update")
     bytes_total_coins_voted = Bytes("total_coins_voted")
-    bytes_reg_app_progrm_hash = Bytes("reg_app_progrm_hash") # For ex: 123456
-    bytes_reg_clear_progrm_hash = Bytes("reg_clear_progrm_hash") # For ex: 123456
+    bytes_app_progrm_hash = Bytes("reg_app_progrm_hash") # For ex: 123456
+    bytes_clear_progrm_hash = Bytes("reg_clear_progrm_hash") # For ex: 123456
     bytes_proposal_count = Bytes("proposal_count")
     proposal_id_global = App.globalGet(bytes_proposal_id)
 
@@ -61,8 +61,8 @@ def approval_program(ARG_GOV_TOKEN):
         App.globalPut(bytes_voting_start,Int(0)),
         App.globalPut(bytes_voting_end,Int(0)),
         App.globalPut(bytes_proposal_url,Bytes("NONE")),
-        App.globalPut(bytes_reg_app_progrm_hash,Bytes("NONE")),
-        App.globalPut(bytes_reg_clear_progrm_hash,Bytes("NONE")),
+        App.globalPut(bytes_app_progrm_hash,Bytes("NONE")),
+        App.globalPut(bytes_clear_progrm_hash,Bytes("NONE")),
         App.globalPut(bytes_votecount_yes,Int(0)),
         App.globalPut(bytes_votecount_no,Int(0)),
         App.globalPut(bytes_votecount_abstain,Int(0)),
@@ -105,9 +105,6 @@ def approval_program(ARG_GOV_TOKEN):
         App.globalPut(bytes_proposal_count, Int(0)),
         ResetProposalParams(),
         App.globalPut(bytes_proposal_id,Int(31420)),
-        App.globalPut(Bytes("program_hash"), Sha512_256(Txn.approval_program())),
-        #App.globalPut(Bytes("program_hash_2"), Bytes("base16", Txn.application_args[5])),
-        #Assert(Sha512_256(Txn.approval_program()) == Bytes("base16",Txn.application_args[5])),
         Return(Int(1))
     ])
 
@@ -179,6 +176,7 @@ def approval_program(ARG_GOV_TOKEN):
     def deploy_rewards_dapp(approval_index, clear_program_index, registry_dapp_id_index):
         return Seq([
             Assert(Sha512_256(Txn.application_args[approval_index]) == Bytes("base16","94c1004b2e97efbbbaf9dd557d7552ac8dc0b8d2d6143b7f1ab72e10d2bb1216")),
+            Assert(Sha512_256(Txn.application_args[clear_program_index]) == Bytes("base16","3ac190fc95bdabce9df57a38dbd13642252040521b6212b7fbd4152ee6a1ae6e")),
             InnerTxnBuilder.Begin(),
             InnerTxnBuilder.SetFields({
                 TxnField.type_enum: TxnType.ApplicationCall,
@@ -305,9 +303,9 @@ def approval_program(ARG_GOV_TOKEN):
             Seq( 
                 # TODO: Confirm the app_id is valid within reason
                 App.globalPut(bytes_reg_app_id_to_update, Btoi(Gtxn[1].application_args[4])),
-                deploy_rewards_dapp(Int(7), Int(8), Int(9))
-                #App.globalPut(bytes_reg_app_progrm_hash, Sha512_256(Txn.application_args[5])),
-                #App.globalPut(bytes_reg_clear_progrm_hash, Sha512_256(Txn.application_args[6])),
+                deploy_rewards_dapp(Int(7), Int(8), Int(9)),
+                App.globalPut(bytes_app_progrm_hash, Txn.application_args[5]),
+                App.globalPut(bytes_clear_progrm_hash, Txn.application_args[6]),
             )
         ),
         App.globalPut(bytes_proposal_count, Add(App.globalGet(bytes_proposal_count), Int(1))),
@@ -449,8 +447,8 @@ def approval_program(ARG_GOV_TOKEN):
 
     update_registry_approval_program = Seq([
         #TODO: make these assertions work
-        #Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Txn.application_args[1])),
-        #Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Txn.application_args[2])),
+        #Assert(App.globalGet(bytes_app_progrm_hash) == Sha512_256(Txn.application_args[1])),
+        #Assert(App.globalGet(bytes_clear_progrm_hash) == Sha512_256(Txn.application_args[2])),
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields({
             TxnField.type_enum: TxnType.ApplicationCall,
@@ -531,8 +529,8 @@ def approval_program(ARG_GOV_TOKEN):
     dao_update_application = Seq([
         Assert(Global.group_size() == Int(2)),
         Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
-        #Assert(App.globalGet(bytes_reg_app_progrm_hash) == Sha512_256(Txn.approval_program())),
-        #Assert(App.globalGet(bytes_reg_clear_progrm_hash) == Sha512_256(Txn.clear_state_program())),
+        Assert(App.globalGet(bytes_app_progrm_hash) == Sha512_256(Txn.approval_program())),
+        Assert(App.globalGet(bytes_clear_progrm_hash) == Sha512_256(Txn.approval_program())),
         ResetProposalParams(),
         Return(Int(1))
     ])
