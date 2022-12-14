@@ -31,6 +31,7 @@ from pyteal import *
 from numpy import int64
 import ans_helper as anshelper
 import hashlib
+from Cryptodome.Hash import SHA512
 import sys
 #sys.path.append('../')
 
@@ -41,6 +42,7 @@ from contracts.dao_app_approval import approval_program
 from contracts.dao_app_clear import clear_state_program
 from contracts.dao_rewards_app import rewards_approval_program
 from contracts.dao_rewards_clear import rewards_clear_state_program
+from pyteal import Sha512_256, TealType
 
 import base64
 import datetime,time
@@ -244,19 +246,17 @@ def print_created_asset(algodclient, account, assetid):
 			print(json.dumps(my_account_info['params'], indent=4))
 			break
 
-def test_compile(algod_client: algod):
+def test_compile(algod_client: algod, gov_asaid=0):
 	compiled_approval_program = compileTeal(rewards_approval_program(), Mode.Application, version=6)
 	compiled_clear_state_program = compileTeal(rewards_clear_state_program(), Mode.Application,version=6)
 
-	#ans_approval_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_approval.teal'))
-	#ans_clear_state_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_clear_state.teal'))
-	
+	compiled_approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
+	compiled_clear_state_program = compile_program(algod_client, str.encode(compiled_clear_state_program))
 
-	approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
-	clear_state_program = compile_program(algod_client,str.encode(compiled_clear_state_program))
-
-	print(hashlib.sha256(approval_program).hexdigest())
-
+	hash = hashlib.new('sha512_256')
+	hash.update(compiled_approval_program)
+	print(hash.hexdigest())
+	return hash.hexdigest()
 
 def DeployANSDAO(algod_client: algod,
 	min_support: int64,
@@ -292,18 +292,13 @@ def DeployANSDAO(algod_client: algod,
 
 	print(len(ans_approval_program))
 
-	
-	#h.update(ans_approval_program)
-	hash = hashlib.sha256(ans_approval_program).hexdigest()
-	print(hash)
-
 	appargs = [
 		min_deposit.to_bytes(8, 'big'), # min deposit
 		min_support.to_bytes(8, 'big'), # min support
 		min_duration.to_bytes(8, 'big'), # min duration
 		max_duration.to_bytes(8, 'big'), # max duration
-		"https://ansdao.org".encode('utf-8'), #url
-		hash.encode('utf-8')
+		"https://ansdao.org".encode('utf-8'),
+		test_compile(algod_client, gov_asaid)
 	]
 	
 	
