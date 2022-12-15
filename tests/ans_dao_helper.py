@@ -520,6 +520,21 @@ def DAOAddProposalUpdateReg(
 	ans_app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))
 	ans_clear_program = anshelper.compile_program(algod_client, str.encode(compiled_clear_state_program))
 
+	hash = hashlib.new('sha512_256')
+	hash.update(ans_app_program)
+	digest = hash.digest()
+	#b64_approval = b64encode(bytes.fromhex(digest)).decode()
+	#print(b64_approval)
+	hash2 = hashlib.new('sha512_256')
+	hash2.update(ans_clear_program)
+	digest2 = hash2.digest()
+
+	compiled_approval_program = anshelper.compileTeal(rewards_approval_program(), Mode.Application,version=6)
+	compiled_clear_state_program = anshelper.compileTeal(rewards_clear_state_program(), Mode.Application,version=6)
+
+	rewards_app_program = compile_program(algod_client, str.encode(compiled_approval_program))
+	rewards_clear_program = compile_program(algod_client,str.encode(compiled_clear_state_program))
+
 	txn_add_proposal = transaction.ApplicationNoOpTxn(
 		sender=account.address_from_private_key(pk_sender),
 		sp=algod_client.suggested_params(),
@@ -532,9 +547,13 @@ def DAOAddProposalUpdateReg(
 			duration.to_bytes(8, 'big'),
 			"https://github.com/someproposal".encode("utf-8"),
 			reg_app_id.to_bytes(8, 'big'),
-			ans_app_program,
-			ans_clear_program
+			digest,
+			digest2,
+			rewards_app_program,
+			rewards_clear_program,
+			reg_app_id.to_bytes(8, 'big'),
 		],
+		foreign_assets=[gov_asaid]
 		#rekey_to=constants.ZERO_ADDRESS
 	)
 	
@@ -977,6 +996,59 @@ def DAODeclareUpdateRegResult(
 		index=dao_app_id,
 		approval_program=ans_app_program,
 		clear_program=ans_clear_program
+
+	)
+
+	Grp_txns_unsign = [txn_declare_result, txn_update_reg]
+
+	Grp_txns_packed_unsigned = transaction.assign_group_id(Grp_txns_unsign)
+	Grp_txns_signed = []
+	
+	for i in range(2):
+		Grp_txns_signed.append(Grp_txns_unsign[i].sign(pvk_sender))
+	
+	try:
+		txn_id = Grp_txns_signed[1].transaction.get_txid()
+		algod_client.send_transactions(Grp_txns_signed)
+		wait_for_confirmation(algod_client, txn_id)
+	except Exception as err:
+		print("There is some error")
+		print(err)
+
+def DAODeclareRegistryUpdateReg(
+	algod_client: algod,
+	pvk_sender: str,
+	dao_app_id: int64,
+	gov_asa_id: int64,
+	reg_app_id: int64
+	):
+
+	compiled_approval_program = anshelper.compileTeal(anshelper.approval_program(logic.get_application_address(dao_app_id)), Mode.Application,version=6)
+	compiled_clear_state_program = anshelper.compileTeal(anshelper.clear_state_program(), Mode.Application,version=6)
+
+	ans_app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))
+	ans_clear_program = anshelper.compile_program(algod_client, str.encode(compiled_clear_state_program))
+
+	txn_declare_result = transaction.ApplicationNoOpTxn(
+		sender=account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		index=dao_app_id,
+		foreign_apps= [reg_app_id],
+		app_args=[
+			"declare_result".encode("utf-8"),
+			"".encode("utf-8"),
+			"".encode("utf-8")
+		],
+		foreign_assets=[gov_asa_id]
+	)
+
+	txn_update_reg = transaction.ApplicationUpdateTxn(
+		sender=account.address_from_private_key(pvk_sender),
+		sp=algod_client.suggested_params(),
+		index=reg_app_id,
+		approval_program=ans_app_program,
+		clear_program=ans_clear_program,
+		foreign_apps=[dao_app_id]
 
 	)
 

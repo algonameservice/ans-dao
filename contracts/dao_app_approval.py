@@ -251,7 +251,7 @@ def approval_program(ARG_GOV_TOKEN):
                     Gtxn[1].application_args[1] == Bytes("social"),
                     Gtxn[1].application_args[1] == Bytes("funding"),
                     Gtxn[1].application_args[1] == Bytes("updatereg"),
-                    Gtxn[1].application_args[1] == Bytes("dao_update")
+                    Gtxn[1].application_args[1] == Bytes("dao_update")  
                 )
             )
         ),
@@ -448,20 +448,12 @@ def approval_program(ARG_GOV_TOKEN):
     ])
 
     update_registry_approval_program = Seq([
-        #TODO: make these assertions work
-        #Assert(App.globalGet(bytes_app_progrm_hash) == Sha512_256(Txn.application_args[1])),
-        #Assert(App.globalGet(bytes_clear_progrm_hash) == Sha512_256(Txn.application_args[2])),
-        InnerTxnBuilder.Begin(),
-        InnerTxnBuilder.SetFields({
-            TxnField.type_enum: TxnType.ApplicationCall,
-            TxnField.application_id: Txn.applications[1],
-            TxnField.on_completion: OnComplete.UpdateApplication,
-            TxnField.approval_program: Txn.application_args[1],
-            TxnField.clear_state_program: Txn.application_args[2]
-        }),
-        InnerTxnBuilder.Submit()
+        Assert(Global.group_size() == Int(2)),
+        Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
+        Assert(Gtxn[1].application_id() == App.globalGet(bytes_reg_app_id_to_update)),
+        Assert(Sha512_256(Gtxn[1].approval_program()) == App.globalGet(bytes_app_progrm_hash)),
+        Assert(Sha512_256(Gtxn[1].clear_state_program()) == App.globalGet(bytes_clear_progrm_hash))
     ])
-
 
     withdraw_funds_from_dao_treasury = Seq([
         InnerTxnBuilder.Begin(),

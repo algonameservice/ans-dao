@@ -119,7 +119,8 @@ def TestSocialProposal(env: Env):
 	dot_algo_reg_app_id = anshelper.DeployDotAlgoReg(
 		ans_dao_env.my_algod_client, 
 		ans_dao_env.funding_acct_mnemonic,
-		logic.get_application_address(env.dao_app_id)
+		logic.get_application_address(env.dao_app_id),
+		env.dao_app_id
 	)
 	print("Successfully deployed ANS Dot Algo Registry at app-id: {}".format(dot_algo_reg_app_id))
 	print("Attempting to add a social proposal")
@@ -209,7 +210,8 @@ def TestFundingProposal(env: Env):
 	dot_algo_reg_app_id = anshelper.DeployDotAlgoReg(
 		ans_dao_env.my_algod_client, 
 		ans_dao_env.funding_acct_mnemonic,
-		logic.get_application_address(env.dao_app_id)
+		logic.get_application_address(env.dao_app_id),
+		env.dao_app_id
 	)
 	print("Successfully deployed ANS Dot Algo Registry at app-id: {}".format(dot_algo_reg_app_id))
 
@@ -299,7 +301,8 @@ def TestUpdateRegProposal(env: Env):
 	dot_algo_reg_app_id = anshelper.DeployDotAlgoReg(
 		ans_dao_env.my_algod_client, 
 		ans_dao_env.funding_acct_mnemonic,
-		logic.get_application_address(env.dao_app_id)
+		logic.get_application_address(env.dao_app_id),
+		env.dao_app_id
 	)
 	print("Successfully deployed ANS Dot Algo Registry at app-id: {}".format(dot_algo_reg_app_id))
 	print("--------------------------------------------------------------------")
@@ -348,7 +351,7 @@ def TestUpdateRegProposal(env: Env):
 	#time.sleep(100)
 
 	print("Declaring Result")
-	DAODeclareResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, dot_algo_reg_app_id)
+	DAODeclareRegistryUpdateReg(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, dot_algo_reg_app_id)
 	print("Vote Declared successfully")
 	print("--------------------------------------------------------------------")
 
@@ -383,7 +386,8 @@ def TestDaoUpdateProposal(env: Env):
 	dot_algo_reg_app_id = anshelper.DeployDotAlgoReg(
 		ans_dao_env.my_algod_client, 
 		ans_dao_env.funding_acct_mnemonic,
-		logic.get_application_address(env.dao_app_id)
+		logic.get_application_address(env.dao_app_id),
+		env.dao_app_id
 	)
 	print("Successfully deployed ANS Dot Algo Registry at app-id: {}".format(dot_algo_reg_app_id))
 	print("--------------------------------------------------------------------")
@@ -438,10 +442,10 @@ if __name__ == "__main__":
 
 	ans_dao_env = Env(SetupClient("purestake"))
 
-	TestDaoUpdateProposal(ans_dao_env)
+	#TestDaoUpdateProposal(ans_dao_env)
 
 	#TestSocialProposal(ans_dao_env)
 
 	#TestFundingProposal(ans_dao_env)	
 
-	#TestUpdateRegProposal(ans_dao_env)
+	TestUpdateRegProposal(ans_dao_env)

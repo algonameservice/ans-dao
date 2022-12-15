@@ -107,7 +107,8 @@ def FundNewAccount(algod_client, receiver, amount, funding_acct_mnemonic):
 def DeployDotAlgoReg(
     algod_client: algod, 
     contract_owner_mnemonic: str, 
-    registry_controller: str
+    registry_controller: str,
+    dao_dapp_id
     ):
 
     private_key=mnemonic.to_private_key(contract_owner_mnemonic)
@@ -137,7 +138,9 @@ def DeployDotAlgoReg(
         clear_program=ans_clear_state_program,
         global_schema=global_schema,
         local_schema=local_schema,
-        accounts=[registry_controller]
+        app_args=[dao_dapp_id.to_bytes(8, 'big')],
+        accounts=[registry_controller],
+		extra_pages=1
     )
 
     # sign transaction

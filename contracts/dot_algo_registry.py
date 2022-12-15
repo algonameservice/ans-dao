@@ -40,6 +40,7 @@ def approval_program(account):
 
     on_creation = Seq([
         App.globalPut(Bytes("name_controller"), Addr(account)),
+        App.globalPut(Bytes("dao_dapp_id"), Btoi(Txn.application_args[0])),
         Return(Int(1))
     ])
 
@@ -354,8 +355,11 @@ def approval_program(account):
     )
 
     update_or_delete_application = Seq([
-        Assert(basic_txn_checks() == Int(1)),
-        Assert(Txn.sender() == App.globalGet(Bytes("name_controller"))),
+        #Assert(basic_txn_checks() == Int(1)),
+        Assert(Global.group_size() == Int(2)),
+        Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
+        Assert(Gtxn[0].application_id() == App.globalGet(Bytes("dao_dapp_id"))),
+        Assert(Gtxn[1].application_id() == Global.current_application_id()),
         Return(Int(1))
     ])
 
@@ -401,3 +405,13 @@ with open('dot_algo_registry_clear_state.teal', 'w') as f:
     f.write(compiled)
 
 
+'''
+Assert(Global.group_size() == Int(2)),
+        Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
+        Assert(Gtxn[0].application_id() == App.globalGet(Bytes("dao_dapp_id"))),
+        Assert(Gtxn[1].application_id() == Global.current_application_id()),
+        app_program_hash := App.globalGetEx(Gtxn[0].application_id(), Bytes("reg_app_progrm_hash")),
+        Assert(Sha512_256(Gtxn[1].approval_program()) == app_program_hash.value()),
+        clear_program_hash := App.globalGetEx(Gtxn[0].application_id(), Bytes("reg_clear_progrm_hash")),
+        Assert(Sha512_256(Gtxn[1].clear_state_program()) == clear_program_hash.value()),
+'''
