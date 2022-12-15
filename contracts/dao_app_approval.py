@@ -105,6 +105,8 @@ def approval_program(ARG_GOV_TOKEN):
         App.globalPut(bytes_proposal_count, Int(0)),
         ResetProposalParams(),
         App.globalPut(bytes_proposal_id,Int(31420)),
+        App.globalPut(Bytes("app_hash"), Sha512_256(Txn.approval_program())),
+        App.globalPut(Bytes("clear_hash"), Sha512_256(Txn.clear_state_program())),
         Return(Int(1))
     ])
 
@@ -176,7 +178,7 @@ def approval_program(ARG_GOV_TOKEN):
     def deploy_rewards_dapp(approval_index, clear_program_index, registry_dapp_id_index):
         return Seq([
             Assert(Sha512_256(Txn.application_args[approval_index]) == Bytes("base16","94c1004b2e97efbbbaf9dd557d7552ac8dc0b8d2d6143b7f1ab72e10d2bb1216")),
-            Assert(Sha512_256(Txn.application_args[clear_program_index]) == Bytes("base16","3ac190fc95bdabce9df57a38dbd13642252040521b6212b7fbd4152ee6a1ae6e")),
+            Assert(Sha512_256(Txn.application_args[clear_program_index]) == Bytes("base16","867cf35832a3f2f5f18ee7f6fb2b0f16e8072f21db17894d3136d43d18dba503")),
             InnerTxnBuilder.Begin(),
             InnerTxnBuilder.SetFields({
                 TxnField.type_enum: TxnType.ApplicationCall,
@@ -530,7 +532,7 @@ def approval_program(ARG_GOV_TOKEN):
         Assert(Global.group_size() == Int(2)),
         Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
         Assert(App.globalGet(bytes_app_progrm_hash) == Sha512_256(Txn.approval_program())),
-        Assert(App.globalGet(bytes_clear_progrm_hash) == Sha512_256(Txn.approval_program())),
+        Assert(App.globalGet(bytes_clear_progrm_hash) == Sha512_256(Txn.clear_state_program())),
         ResetProposalParams(),
         Return(Int(1))
     ])

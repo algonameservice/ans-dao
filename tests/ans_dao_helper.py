@@ -248,8 +248,8 @@ def print_created_asset(algodclient, account, assetid):
 			break
 
 def test_compile(algod_client: algod, gov_asaid=0):
-	compiled_approval_program = compileTeal(rewards_approval_program(), Mode.Application, version=6)
-	compiled_clear_state_program = compileTeal(rewards_clear_state_program(), Mode.Application,version=6)
+	compiled_approval_program = compileTeal(approval_program(gov_asaid), Mode.Application, version=6)
+	compiled_clear_state_program = compileTeal(clear_state_program(), Mode.Application,version=6)
 
 	compiled_approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
 	compiled_clear_state_program = compile_program(algod_client, str.encode(compiled_clear_state_program))
@@ -258,9 +258,12 @@ def test_compile(algod_client: algod, gov_asaid=0):
 	hash.update(compiled_approval_program)
 	digest = hash.hexdigest()
 	print(digest)
-	hash.update(compiled_clear_state_program)
-	b64 = b64encode(bytes.fromhex(digest)).decode()
-	print(b64)
+	hash2 = hashlib.new('sha512_256')
+	hash2.update(compiled_clear_state_program)
+	digest2 = hash2.hexdigest()
+	print(digest2)
+	#b64 = b64encode(bytes.fromhex(digest)).decode()
+	#print(b64)
 
 	return hash.hexdigest()
 
@@ -290,21 +293,16 @@ def DeployANSDAO(algod_client: algod,
 	compiled_approval_program = compileTeal(approval_program(gov_asaid), Mode.Application, version=6)
 	compiled_clear_state_program = compileTeal(clear_state_program(), Mode.Application,version=6)
 
-	#ans_approval_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_approval.teal'))
-	#ans_clear_state_program = compile_program(algod_client, import_teal_source_code_as_binary('dao_app_clear_state.teal'))
-
 	ans_approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
 	ans_clear_state_program = compile_program(algod_client,str.encode(compiled_clear_state_program))
 
-	print(len(ans_approval_program))
 
 	appargs = [
 		min_deposit.to_bytes(8, 'big'), # min deposit
 		min_support.to_bytes(8, 'big'), # min support
 		min_duration.to_bytes(8, 'big'), # min duration
 		max_duration.to_bytes(8, 'big'), # max duration
-		"https://ansdao.org".encode('utf-8'),
-		test_compile(algod_client, gov_asaid)
+		"https://ansdao.org".encode('utf-8')
 	]
 	
 	
@@ -578,18 +576,28 @@ def DAOAddUpdateProposal(
 	
 	Grp_txns_unsign.append(deposit_txn)
 	
-	compiled_approval_program = anshelper.compileTeal(anshelper.approval_program(logic.get_application_address(dao_app_id)), Mode.Application,version=6)
-	compiled_clear_state_program = anshelper.compileTeal(anshelper.clear_state_program(), Mode.Application,version=6)
+	compiled_approval_program = anshelper.compileTeal(approval_program(gov_asaid), Mode.Application,version=6)
+	compiled_clear_state_program = anshelper.compileTeal(clear_state_program(), Mode.Application,version=6)
 
 	app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))
 	clear_program = anshelper.compile_program(algod_client, str.encode(compiled_clear_state_program))
 
 	hash = hashlib.new('sha512_256')
 	hash.update(app_program)
-	digest = hash.hexdigest()
-	b64_approval = b64encode(bytes.fromhex(digest)).decode()
-	hash.update(clear_program)
-	b64_clear = b64encode(bytes.fromhex(digest)).decode()
+	digest = hash.digest()
+	#b64_approval = b64encode(bytes.fromhex(digest)).decode()
+	#print(b64_approval)
+	hash2 = hashlib.new('sha512_256')
+	hash2.update(clear_program)
+	digest2 = hash2.digest()
+	#b64_clear = b64encode(bytes.fromhex(digest2)).decode()
+	#print(b64_clear)
+
+	compiled_approval_program = anshelper.compileTeal(rewards_approval_program(), Mode.Application,version=6)
+	compiled_clear_state_program = anshelper.compileTeal(rewards_clear_state_program(), Mode.Application,version=6)
+
+	rewards_app_program = compile_program(algod_client, str.encode(compiled_approval_program))
+	rewards_clear_program = compile_program(algod_client,str.encode(compiled_clear_state_program))
 
 	txn_add_proposal = transaction.ApplicationNoOpTxn(
 		sender=account.address_from_private_key(pk_sender),
@@ -603,11 +611,13 @@ def DAOAddUpdateProposal(
 			duration.to_bytes(8, 'big'),
 			"https://github.com/someproposal".encode("utf-8"),
 			dao_app_id.to_bytes(8, 'big'),
-			ans_app_program,
-			ans_clear_program,
-			b64_approval,
-			b64_clear
+			digest,
+			digest2,
+			rewards_app_program,
+			rewards_clear_program,
+			reg_app_id.to_bytes(8, 'big')
 		],
+		foreign_assets=[gov_asaid]
 		#rekey_to=constants.ZERO_ADDRESS
 	)
 	
@@ -942,8 +952,8 @@ def DAODeclareUpdateRegResult(
 	reg_app_id: int64
 	):
 
-	compiled_approval_program = anshelper.compileTeal(anshelper.approval_program(logic.get_application_address(dao_app_id)), Mode.Application,version=6)
-	compiled_clear_state_program = anshelper.compileTeal(anshelper.clear_state_program(), Mode.Application,version=6)
+	compiled_approval_program = anshelper.compileTeal(approval_program(gov_asa_id), Mode.Application,version=6)
+	compiled_clear_state_program = anshelper.compileTeal(clear_state_program(), Mode.Application,version=6)
 
 	ans_app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))
 	ans_clear_program = anshelper.compile_program(algod_client, str.encode(compiled_clear_state_program))
@@ -955,8 +965,8 @@ def DAODeclareUpdateRegResult(
 		foreign_apps= [reg_app_id],
 		app_args=[
 			"declare_result".encode("utf-8"),
-			ans_app_program,
-			ans_clear_program
+			"".encode("utf-8"),
+			"".encode("utf-8")
 		],
 		foreign_assets=[gov_asa_id]
 	)
