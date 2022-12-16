@@ -106,9 +106,7 @@ def FundNewAccount(algod_client, receiver, amount, funding_acct_mnemonic):
 
 def DeployDotAlgoReg(
     algod_client: algod, 
-    contract_owner_mnemonic: str, 
-    registry_controller: str,
-    dao_dapp_id
+    contract_owner_mnemonic: str
     ):
 
     private_key=mnemonic.to_private_key(contract_owner_mnemonic)
@@ -124,7 +122,7 @@ def DeployDotAlgoReg(
 
     on_complete = transaction.OnComplete.NoOpOC.real
 
-    compiled_approval_program = compileTeal(approval_program(registry_controller), Mode.Application,version=6)
+    compiled_approval_program = compileTeal(approval_program(), Mode.Application,version=6)
     compiled_clear_state_program = compileTeal(clear_state_program(), Mode.Application,version=6)
 
     ans_approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
@@ -138,8 +136,6 @@ def DeployDotAlgoReg(
         clear_program=ans_clear_state_program,
         global_schema=global_schema,
         local_schema=local_schema,
-        app_args=[dao_dapp_id.to_bytes(8, 'big')],
-        accounts=[registry_controller],
 		extra_pages=1
     )
 
@@ -242,6 +238,34 @@ def link_socials(domainname, platform_name, profile, sender, sender_private_key,
     txn_signed_link_social = link_social_txn_unsign.sign(sender_private_key)
     txid = txn_signed_link_social.get_txid()
     algod_client.send_transaction(txn_signed_link_social)
+    wait_for_confirmation(algod_client,txid)
+
+def update_global_state(algod_client, name_controller, dao_dapp_id, registry_dapp_id, private_key):
+    private_key=mnemonic.to_private_key(private_key)
+    sender = account.address_from_private_key(private_key)
+    print(sender)
+    txn_args = [
+        "update_controller".encode("utf-8")
+    ]
+
+    update_state_txn_1 = transaction.ApplicationNoOpTxn(sender, algod_client.suggested_params(), registry_dapp_id, txn_args, [name_controller])
+
+    txn_args = [
+        "update_app_id".encode("utf-8")
+    ]
+
+    update_state_txn_2 = transaction.ApplicationNoOpTxn(sender, algod_client.suggested_params(), registry_dapp_id, txn_args, foreign_apps=[dao_dapp_id])
+
+    Grp_txns_unsign = [update_state_txn_1, update_state_txn_2]
+
+    gid = transaction.calculate_group_id(Grp_txns_unsign)
+    for i in range(2):
+        Grp_txns_unsign[i].group = gid
+
+    Grp_txns_signd = [Grp_txns_unsign[0].sign(private_key), Grp_txns_unsign[1].sign(private_key)] 
+
+    txid = update_state_txn_1.get_txid()
+    algod_client.send_transactions(Grp_txns_signd)
     wait_for_confirmation(algod_client,txid)
 
 def init_name_tnsfr_txn(domainname, sender, sender_private_key, tnsfr_price, recipient_addr, reg_app_id, algod_client):

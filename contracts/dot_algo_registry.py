@@ -23,7 +23,7 @@ SOFTWARE.
 from pyteal import *
 from . import constants
 
-def approval_program(account):
+def approval_program():
 
     get_arg_1 = Txn.application_args[1]
     get_arg_2 = Txn.application_args[2]
@@ -39,8 +39,9 @@ def approval_program(account):
     property_to_delete = App.localGetEx(Int(1), App.id(), Txn.application_args[1])
 
     on_creation = Seq([
-        App.globalPut(Bytes("name_controller"), Addr(account)),
-        App.globalPut(Bytes("dao_dapp_id"), Btoi(Txn.application_args[0])),
+        #App.globalPut(Bytes("name_controller"), Addr(account)),
+        App.globalPut(Bytes("name_controller"), Txn.sender()),
+        #App.globalPut(Bytes("dao_dapp_id"), Btoi(Txn.application_args[0])),
         Return(Int(1))
     ])
 
@@ -370,6 +371,18 @@ def approval_program(account):
         Return(Int(1))
     ])
 
+    update_controller = Seq([
+        #Assert(Txn.sender() == App.globalGet(Bytes("name_controller"))),
+        App.globalPut(Bytes("name_controller"), Txn.accounts[1]),
+        Return(Int(1))
+    ])
+
+    update_app_id = Seq([
+        #Assert(Txn.sender() == App.globalGet(Bytes("name_controller"))),
+        App.globalPut(Bytes("dao_dapp_id"), Txn.applications[1]),
+        Return(Int(1))
+    ])
+
     program = Cond(
         [Txn.application_id() == Int(0), on_creation],
         [Txn.on_completion() == OnComplete.OptIn, Return(Int(1))],
@@ -378,6 +391,9 @@ def approval_program(account):
         [Txn.on_completion() == OnComplete.CloseOut, Return(Int(0))],
         [Txn.on_completion() == OnComplete.ClearState, Return(Int(0))],
         [Txn.application_args[0] == Bytes("update_global_state"), update_global_state],
+        #TODO: Remove these two below
+        [Txn.application_args[0] == Bytes("update_controller"), update_controller],
+        [Txn.application_args[0] == Bytes("update_app_id"), update_app_id],
         [Txn.application_args[0] == Bytes("register_name"), register_name],
         [Txn.application_args[0] == Bytes("update_name"), update_name],
         [Txn.application_args[0] == Bytes("remove_property"), remove_property],
@@ -397,7 +413,7 @@ def clear_state_program():
 
 
 with open('dot_algo_registry_approval.teal', 'w') as f:
-    compiled = compileTeal(approval_program('PFOW4ROW7QWHLQNQKDX64Y73DL3VLY2ATNU3UN6ICPTVTWF2H2XEB7IJUY'), Mode.Application, version=6)
+    compiled = compileTeal(approval_program(), Mode.Application, version=6)
     f.write(compiled)
 
 with open('dot_algo_registry_clear_state.teal', 'w') as f:

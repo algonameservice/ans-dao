@@ -271,7 +271,8 @@ def DeployANSDAO(algod_client: algod,
 	min_support: int64,
 	min_duration: int64,
 	contract_owner_mnemonic: str, 
-	gov_asaid: int64
+	gov_asaid: int64,
+	registry_dapp_id: int64
 	):
 
 	pk_owner=mnemonic.to_private_key(contract_owner_mnemonic)
@@ -296,7 +297,6 @@ def DeployANSDAO(algod_client: algod,
 	ans_approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
 	ans_clear_state_program = compile_program(algod_client,str.encode(compiled_clear_state_program))
 
-
 	appargs = [
 		min_deposit.to_bytes(8, 'big'), # min deposit
 		min_support.to_bytes(8, 'big'), # min support
@@ -304,8 +304,6 @@ def DeployANSDAO(algod_client: algod,
 		max_duration.to_bytes(8, 'big'), # max duration
 		"https://ansdao.org".encode('utf-8')
 	]
-	
-	
 	
 	txn = transaction.ApplicationCreateTxn(
 		sender=acct_owner,
@@ -317,6 +315,7 @@ def DeployANSDAO(algod_client: algod,
 		local_schema=local_schema,
 		app_args=appargs,
 		foreign_assets=[gov_asaid],
+		foreign_apps=[registry_dapp_id],
 		extra_pages=1
 	)
 	
@@ -401,8 +400,7 @@ def DAOAddProposalSocial(
 			duration.to_bytes(8, 'big'),
 			"https://github.com/someproposal",
 			app_program,
-			clear_program,
-			registry_app_id.to_bytes(8, 'big')
+			clear_program
 		],
 		foreign_assets=[gov_asaid]
 		#rekey_to=constants.ZERO_ADDRESS
@@ -470,8 +468,7 @@ def DAOAddProposalFunding(
 			amt_algos.to_bytes(8, 'big'),
 			amt_ans.to_bytes(8, 'big'),
 			app_program,
-			clear_program,
-			reg_app_id.to_bytes(8, 'big')
+			clear_program
 		]
 		#rekey_to=constants.ZERO_ADDRESS
 	)
@@ -514,7 +511,7 @@ def DAOAddProposalUpdateReg(
 	
 	Grp_txns_unsign.append(deposit_txn)
 	
-	compiled_approval_program = anshelper.compileTeal(anshelper.approval_program(logic.get_application_address(dao_app_id)), Mode.Application,version=6)
+	compiled_approval_program = anshelper.compileTeal(anshelper.approval_program(), Mode.Application,version=6)
 	compiled_clear_state_program = anshelper.compileTeal(anshelper.clear_state_program(), Mode.Application,version=6)
 
 	ans_app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))
@@ -546,12 +543,10 @@ def DAOAddProposalUpdateReg(
 			"updatereg".encode("utf-8"),
 			duration.to_bytes(8, 'big'),
 			"https://github.com/someproposal".encode("utf-8"),
-			reg_app_id.to_bytes(8, 'big'),
 			digest,
 			digest2,
 			rewards_app_program,
-			rewards_clear_program,
-			reg_app_id.to_bytes(8, 'big'),
+			rewards_clear_program
 		],
 		foreign_assets=[gov_asaid]
 		#rekey_to=constants.ZERO_ADDRESS
@@ -629,12 +624,10 @@ def DAOAddUpdateProposal(
 			"dao_update".encode("utf-8"),
 			duration.to_bytes(8, 'big'),
 			"https://github.com/someproposal".encode("utf-8"),
-			dao_app_id.to_bytes(8, 'big'),
 			digest,
 			digest2,
 			rewards_app_program,
-			rewards_clear_program,
-			reg_app_id.to_bytes(8, 'big')
+			rewards_clear_program
 		],
 		foreign_assets=[gov_asaid]
 		#rekey_to=constants.ZERO_ADDRESS
@@ -798,22 +791,13 @@ def DAODeclareResult(
 	reg_app_id: int64
 	):
 
-	compiled_approval_program = anshelper.compileTeal(anshelper.approval_program(logic.get_application_address(dao_app_id)), Mode.Application,version=6)
-	compiled_clear_state_program = anshelper.compileTeal(anshelper.clear_state_program(), Mode.Application,version=6)
-
-	ans_app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))
-	ans_clear_program = anshelper.compile_program(algod_client, str.encode(compiled_clear_state_program))
-
-	
 	txn_declare_result = transaction.ApplicationNoOpTxn(
 		sender=account.address_from_private_key(pvk_sender),
 		sp=algod_client.suggested_params(),
 		index=dao_app_id,
 		foreign_apps= [reg_app_id],
 		app_args=[
-			"declare_result".encode("utf-8"),
-			ans_app_program,
-			ans_clear_program
+			"declare_result".encode("utf-8")
 		],
 		foreign_assets=[gov_asa_id]
 	)
@@ -1023,7 +1007,7 @@ def DAODeclareRegistryUpdateReg(
 	reg_app_id: int64
 	):
 
-	compiled_approval_program = anshelper.compileTeal(anshelper.approval_program(logic.get_application_address(dao_app_id)), Mode.Application,version=6)
+	compiled_approval_program = anshelper.compileTeal(anshelper.approval_program(), Mode.Application,version=6)
 	compiled_clear_state_program = anshelper.compileTeal(anshelper.clear_state_program(), Mode.Application,version=6)
 
 	ans_app_program = anshelper.compile_program(algod_client, str.encode(compiled_approval_program))

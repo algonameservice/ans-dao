@@ -17,15 +17,32 @@ class Env(object):
 		print("Deploying DAO APP")
 		self._GOV_ASA_ID = DeployANSToken(self.my_algod_client, self.funding_acct_mnemonic)
 		#test_compile(algod_client, self._GOV_ASA_ID)
+
+		print("Attempting to Deploy ANS Dot algo registry")
+		dot_algo_reg_app_id = anshelper.DeployDotAlgoReg(
+			algod_client, 
+			self.funding_acct_mnemonic
+		)
+
+		self.REGISTRY_DAPP_ID = dot_algo_reg_app_id
+
+		print("Successfully deployed ANS Dot Algo Registry at app-id: {}".format(dot_algo_reg_app_id))
 		
-		self._DAO_APP_ID = DeployANSDAO(self.my_algod_client, 200000, 1, self._funding_acct_mnemonic,self._GOV_ASA_ID)
+		self._DAO_APP_ID = DeployANSDAO(self.my_algod_client, 200000, 1, self._funding_acct_mnemonic,self._GOV_ASA_ID, dot_algo_reg_app_id)
 		print(self._DAO_APP_ID)
-		
+
 		print("Deployed ANS DAO APP with APP-id "+str(self._DAO_APP_ID))
 		
 		acct_dao_escrow = logic.get_application_address(self._DAO_APP_ID)
 		print("DAO Escrow add: "+acct_dao_escrow)
 		print("--------------------------------------------------------------------")
+
+		print('Updating global state of Registry Dapp')
+
+		anshelper.update_global_state(self.my_algod_client, acct_dao_escrow, self._DAO_APP_ID, dot_algo_reg_app_id, self.funding_acct_mnemonic)
+		
+		'''
+		print('Global state updated')
 		
 		print("Funding DAO APP's escrow account: ")
 		FundNewAccount(self.my_algod_client, acct_dao_escrow, 5000000, self._funding_acct_mnemonic)
@@ -37,7 +54,7 @@ class Env(object):
 		print("Successfully opted DAO APP in to GOV ASA")
 		print("--------------------------------------------------------------------")
 		TransferASA(self.my_algod_client,20001000,mnemonic.to_private_key(self.funding_acct_mnemonic),logic.get_application_address(self._DAO_APP_ID),self._GOV_ASA_ID)
-		
+		'''
 		
 	@property
 	def my_algod_client(self):
@@ -58,6 +75,10 @@ class Env(object):
 	@property
 	def dao_app_id(self):
 		return self._DAO_APP_ID
+	
+	@property
+	def dot_algo_reg_app_id(self):
+		return self.REGISTRY_DAPP_ID
 
 def AddRandomVotesFromRandomAccounts(env: Env, num: int64):
 
@@ -90,7 +111,7 @@ def TestSocialProposal(env: Env):
 	second_acct = mnemonic.to_private_key(second_acct_mnemonic)
 
 	print("Generated new account: "+new_acct_addr)
-	FundNewAccount(env.my_algod_client, new_acct_addr, 3000000, env.funding_acct_mnemonic)
+	FundNewAccount(env.my_algod_client, new_acct_addr, 9000000, env.funding_acct_mnemonic)
 	print("Funded new account {} with 9 ALGO and new balance is: {:,} ALGOs".format(new_acct_addr,util.microalgos_to_algos(env.my_algod_client.account_info(new_acct_addr).get('amount'))))
 	
 	FundNewAccount(env.my_algod_client, second_acct_addr, 2000000, env.funding_acct_mnemonic)
@@ -115,23 +136,14 @@ def TestSocialProposal(env: Env):
 	print_asset_holding(env.my_algod_client,new_acct_addr, env._GOV_ASA_ID)
 	print("--------------------------------------------------------------------")
 	
-	print("Attempting to Deploy ANS Dot algo registry")
-	dot_algo_reg_app_id = anshelper.DeployDotAlgoReg(
-		ans_dao_env.my_algod_client, 
-		ans_dao_env.funding_acct_mnemonic,
-		logic.get_application_address(env.dao_app_id),
-		env.dao_app_id
-	)
-	print("Successfully deployed ANS Dot Algo Registry at app-id: {}".format(dot_algo_reg_app_id))
 	print("Attempting to add a social proposal")
-	DAOAddProposalSocial(env.my_algod_client,pvk_new_acct, 1, env.gov_asa_id, 20000000, env.dao_app_id, dot_algo_reg_app_id)
+	DAOAddProposalSocial(env.my_algod_client,pvk_new_acct, 1, env.gov_asa_id, 20000000, env.dao_app_id, env.dot_algo_reg_app_id)
 	print_asset_holding(env.my_algod_client, new_acct_addr, env.gov_asa_id)
 	print("Successfully added social proposal")
 	print("--------------------------------------------------------------------")
 
-	'''
 	print("Attempting to register a domain")
-	gtx_unsign_regname, lsig =  anshelper.prep_name_reg_gtxn(new_acct_addr, "lalith" , 1, dot_algo_reg_app_id, ans_dao_env.my_algod_client)
+	gtx_unsign_regname, lsig =  anshelper.prep_name_reg_gtxn(new_acct_addr, "lalith" , 1, env.dot_algo_reg_app_id, ans_dao_env.my_algod_client)
 	anshelper.sign_name_reg_gtxn(new_acct_addr, pvk_new_acct, gtx_unsign_regname, lsig, ans_dao_env.my_algod_client)
 	print("Successfully registered a domain")
 
@@ -145,20 +157,20 @@ def TestSocialProposal(env: Env):
 	
 	print('accepting to be a delegate')
 	accept_delegate(env.my_algod_client, second_acct, env.dao_app_id, env.gov_asa_id)
-	print("Delegating vote")
-	delegate_vote(env.my_algod_client, pvk_new_acct, second_acct_addr, 1000, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
+	#print("Delegating vote")
+	#delegate_vote(env.my_algod_client, pvk_new_acct, second_acct_addr, 1000, env.gov_asa_id, env.dao_app_id, env.dot_algo_reg_app_id, "lalith")
 	
 	#undo_delegate(env.my_algod_client, pvk_new_acct, second_acct_addr, env.gov_asa_id, env.dao_app_id)
 	
-	print("Voting as delegate")
-	VoteAsDelegate(env.my_algod_client, "yes", second_acct, env.dao_app_id, dot_algo_reg_app_id)
-	print("Successfully voted as delegate")
+	#print("Voting as delegate")
+	#VoteAsDelegate(env.my_algod_client, "yes", second_acct, env.dao_app_id, env.dot_algo_reg_app_id)
+	#print("Successfully voted as delegate")
 	
 	
 	print("Funding acct with some more ALGOs to meet raised min balance")
 	
 	print("Attempting to vote on the social proposal")
-	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
+	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, env.dot_algo_reg_app_id, "lalith")
 	print("Successfully registered vote")
 	print("--------------------------------------------------------------------")
 	
@@ -171,7 +183,7 @@ def TestSocialProposal(env: Env):
 	DAODeclareResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, 812342)
 	print("Vote Declared successfully")
 	print("--------------------------------------------------------------------")
-	'''
+	
 def TestFundingProposal(env: Env):
 
 	new_acct_addr, new_acct_mnemonic = GenerateAccount()
@@ -206,17 +218,8 @@ def TestFundingProposal(env: Env):
 	print_asset_holding(env.my_algod_client,new_acct_addr, env._GOV_ASA_ID)
 	print("--------------------------------------------------------------------")
 	
-	print("Attempting to Deploy ANS Dot algo registry")
-	dot_algo_reg_app_id = anshelper.DeployDotAlgoReg(
-		ans_dao_env.my_algod_client, 
-		ans_dao_env.funding_acct_mnemonic,
-		logic.get_application_address(env.dao_app_id),
-		env.dao_app_id
-	)
-	print("Successfully deployed ANS Dot Algo Registry at app-id: {}".format(dot_algo_reg_app_id))
-
 	print("Attempting to register a domain")
-	gtx_unsign_regname, lsig =  anshelper.prep_name_reg_gtxn(new_acct_addr, "lalith" , 1, dot_algo_reg_app_id, ans_dao_env.my_algod_client)
+	gtx_unsign_regname, lsig =  anshelper.prep_name_reg_gtxn(new_acct_addr, "lalith" , 1, env.dot_algo_reg_app_id, ans_dao_env.my_algod_client)
 	anshelper.sign_name_reg_gtxn(new_acct_addr, pvk_new_acct, gtx_unsign_regname, lsig, ans_dao_env.my_algod_client)
 	print("Successfully registered a domain")
 
@@ -228,7 +231,7 @@ def TestFundingProposal(env: Env):
 		env.gov_asa_id,
 		20000000,
 		env.dao_app_id,
-		dot_algo_reg_app_id,
+		env.dot_algo_reg_app_id,
 		100000,
 		100000,
 		new_acct_addr
@@ -245,18 +248,21 @@ def TestFundingProposal(env: Env):
 	DappOptIn(env.my_algod_client, second_acct, env.dao_app_id)
 	DappOptIn(env.my_algod_client, second_acct, get_rewards_app(env.dao_app_id))
 
+	print('accepting to be a delegate')
+	accept_delegate(env.my_algod_client, second_acct, env.dao_app_id, env.gov_asa_id)
+
 	print("Delegating vote")
-	delegate_vote(env.my_algod_client, pvk_new_acct, second_acct_addr, 1000, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
+	delegate_vote(env.my_algod_client, pvk_new_acct, second_acct_addr, 1000, env.gov_asa_id, env.dao_app_id, env.dot_algo_reg_app_id, "lalith")
 	#undo_delegate(env.my_algod_client, pvk_new_acct, second_acct_addr, env.gov_asa_id, env.dao_app_id)
 
 	print("Voting as delegate")
-	VoteAsDelegate(env.my_algod_client, "yes", second_acct, env.dao_app_id, dot_algo_reg_app_id)
+	VoteAsDelegate(env.my_algod_client, "yes", second_acct, env.dao_app_id, env.dot_algo_reg_app_id)
 	print("Successfully voted as delegate")
 	
 	print("Funding acct with some more ALGOs to meet raised min balance")
 	'''
 	print("Attempting to vote on the social proposal")
-	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
+	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, env.dot_algo_reg_app_id, "lalith")
 	print("Successfully registered vote")
 	print("--------------------------------------------------------------------")
 	'''
@@ -296,20 +302,9 @@ def TestUpdateRegProposal(env: Env):
 	print_asset_holding(env.my_algod_client,new_acct_addr, env._GOV_ASA_ID)
 	print("--------------------------------------------------------------------")
 
-
-	print("Attempting to Deploy ANS Dot algo registry")
-	dot_algo_reg_app_id = anshelper.DeployDotAlgoReg(
-		ans_dao_env.my_algod_client, 
-		ans_dao_env.funding_acct_mnemonic,
-		logic.get_application_address(env.dao_app_id),
-		env.dao_app_id
-	)
-	print("Successfully deployed ANS Dot Algo Registry at app-id: {}".format(dot_algo_reg_app_id))
-	print("--------------------------------------------------------------------")
-
 	funding_amt = 2000000
 	print("Funding Dot Algo Name registry with {:,} ALGOs".format(util.microalgos_to_algos(funding_amt)))
-	FundNewAccount(env.my_algod_client, logic.get_application_address(dot_algo_reg_app_id), funding_amt, env.funding_acct_mnemonic)
+	FundNewAccount(env.my_algod_client, logic.get_application_address(env.dot_algo_reg_app_id), funding_amt, env.funding_acct_mnemonic)
 	print("Funded new account {} with {} ALGO and new balance is: {}".format(
 		new_acct_addr,
 		funding_amt,
@@ -317,7 +312,7 @@ def TestUpdateRegProposal(env: Env):
 	)
 	
 	print("Attempting to register a domain")
-	gtx_unsign_regname, lsig =  anshelper.prep_name_reg_gtxn(new_acct_addr, "lalith" , 1, dot_algo_reg_app_id, ans_dao_env.my_algod_client)
+	gtx_unsign_regname, lsig =  anshelper.prep_name_reg_gtxn(new_acct_addr, "lalith" , 1, env.dot_algo_reg_app_id, ans_dao_env.my_algod_client)
 	anshelper.sign_name_reg_gtxn(new_acct_addr, pvk_new_acct, gtx_unsign_regname, lsig, ans_dao_env.my_algod_client)
 	print("Successfully registered a domain")
 
@@ -335,7 +330,7 @@ def TestUpdateRegProposal(env: Env):
 		env.gov_asa_id,
 		20000000,
 		env.dao_app_id,
-		dot_algo_reg_app_id,
+		env.dot_algo_reg_app_id,
 		new_acct_addr
 	)
 	print_asset_holding(env.my_algod_client, new_acct_addr, env.gov_asa_id)
@@ -343,7 +338,7 @@ def TestUpdateRegProposal(env: Env):
 	print("--------------------------------------------------------------------")
 
 	print("Attempting to vote on the update reg proposal")
-	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
+	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, env.dot_algo_reg_app_id, "lalith")
 	print("Successfully registered vote")
 	print("--------------------------------------------------------------------")
 
@@ -351,7 +346,7 @@ def TestUpdateRegProposal(env: Env):
 	#time.sleep(100)
 
 	print("Declaring Result")
-	DAODeclareRegistryUpdateReg(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, dot_algo_reg_app_id)
+	DAODeclareRegistryUpdateReg(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, env.dot_algo_reg_app_id)
 	print("Vote Declared successfully")
 	print("--------------------------------------------------------------------")
 
@@ -381,20 +376,9 @@ def TestDaoUpdateProposal(env: Env):
 	print_asset_holding(env.my_algod_client,new_acct_addr, env._GOV_ASA_ID)
 	print("--------------------------------------------------------------------")
 
-
-	print("Attempting to Deploy ANS Dot algo registry")
-	dot_algo_reg_app_id = anshelper.DeployDotAlgoReg(
-		ans_dao_env.my_algod_client, 
-		ans_dao_env.funding_acct_mnemonic,
-		logic.get_application_address(env.dao_app_id),
-		env.dao_app_id
-	)
-	print("Successfully deployed ANS Dot Algo Registry at app-id: {}".format(dot_algo_reg_app_id))
-	print("--------------------------------------------------------------------")
-
 	funding_amt = 2000000
 	print("Funding Dot Algo Name registry with {:,} ALGOs".format(util.microalgos_to_algos(funding_amt)))
-	FundNewAccount(env.my_algod_client, logic.get_application_address(dot_algo_reg_app_id), funding_amt, env.funding_acct_mnemonic)
+	FundNewAccount(env.my_algod_client, logic.get_application_address(env.dot_algo_reg_app_id), funding_amt, env.funding_acct_mnemonic)
 	print("Funded new account {} with {} ALGO and new balance is: {}".format(
 		new_acct_addr,
 		funding_amt,
@@ -402,7 +386,7 @@ def TestDaoUpdateProposal(env: Env):
 	)
 	
 	print("Attempting to register a domain")
-	gtx_unsign_regname, lsig =  anshelper.prep_name_reg_gtxn(new_acct_addr, "lalith" , 1, dot_algo_reg_app_id, ans_dao_env.my_algod_client)
+	gtx_unsign_regname, lsig =  anshelper.prep_name_reg_gtxn(new_acct_addr, "lalith" , 1, env.dot_algo_reg_app_id, ans_dao_env.my_algod_client)
 	anshelper.sign_name_reg_gtxn(new_acct_addr, pvk_new_acct, gtx_unsign_regname, lsig, ans_dao_env.my_algod_client)
 	print("Successfully registered a domain")
 
@@ -420,7 +404,7 @@ def TestDaoUpdateProposal(env: Env):
 		env.gov_asa_id,
 		20000000,
 		env.dao_app_id,
-		dot_algo_reg_app_id,
+		env.dot_algo_reg_app_id,
 		new_acct_addr
 	)
 	print_asset_holding(env.my_algod_client, new_acct_addr, env.gov_asa_id)
@@ -428,12 +412,12 @@ def TestDaoUpdateProposal(env: Env):
 	print("--------------------------------------------------------------------")
 	
 	print("Attempting to vote on the dao update proposal")
-	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, dot_algo_reg_app_id, "lalith")
+	DAORegisterVote(env.my_algod_client, "yes", pvk_new_acct, env.gov_asa_id, env.dao_app_id, env.dot_algo_reg_app_id, "lalith")
 	print("Successfully registered vote")
 	print("--------------------------------------------------------------------")
 
 	print("Declaring Result")
-	DAODeclareUpdateRegResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, dot_algo_reg_app_id)
+	DAODeclareUpdateRegResult(env.my_algod_client, pvk_new_acct, env.dao_app_id, env.gov_asa_id, env.dot_algo_reg_app_id)
 	print("Vote Declared successfully")
 	print("--------------------------------------------------------------------")
 	
@@ -448,4 +432,4 @@ if __name__ == "__main__":
 
 	#TestFundingProposal(ans_dao_env)	
 
-	TestUpdateRegProposal(ans_dao_env)
+	#TestUpdateRegProposal(ans_dao_env)
