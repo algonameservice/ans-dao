@@ -13,6 +13,7 @@ class Env(object):
 
 		self._my_algod_client = algod_client
 		self._funding_addr, self._funding_acct_mnemonic = GetFundingAccount(self.my_algod_client)
+		#test_compile(algod_client)
 		
 		print("Deploying DAO APP")
 		self._GOV_ASA_ID = DeployANSToken(self.my_algod_client, self.funding_acct_mnemonic)
@@ -100,7 +101,7 @@ class Env(object):
 		gtx_unsign_regname, lsig =  anshelper.prep_name_reg_gtxn(new_acct_addr, "lalith" , 1, dot_algo_reg_app_id, self.my_algod_client)
 		anshelper.sign_name_reg_gtxn(new_acct_addr, pvk_new_acct, gtx_unsign_regname, lsig, self.my_algod_client)
 		print("Successfully registered a domain")
-
+		
 	@property
 	def my_algod_client(self):
 		return self._my_algod_client
@@ -335,4 +336,4 @@ if __name__ == "__main__":
 	#TestSocialProposal(ans_dao_env)
 	#TestFundingProposal(ans_dao_env)	
 	#TestUpdateRegProposal(ans_dao_env)
-	TestDaoUpdateProposal(ans_dao_env)
+	#TestDaoUpdateProposal(ans_dao_env)

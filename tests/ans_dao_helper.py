@@ -248,18 +248,21 @@ def print_created_asset(algodclient, account, assetid):
 			break
 
 def test_compile(algod_client: algod, gov_asaid=0):
-	compiled_approval_program = compileTeal(approval_program(gov_asaid), Mode.Application, version=6)
-	compiled_clear_state_program = compileTeal(clear_state_program(), Mode.Application,version=6)
+	
+	f1 = open("dot_algo_registry_approval.teal", "r")
+	f2 = open("dot_algo_registry_clear_state.teal", "r")
 
-	compiled_approval_program = compile_program(algod_client, str.encode(compiled_approval_program))
-	compiled_clear_state_program = compile_program(algod_client, str.encode(compiled_clear_state_program))
+	ans_app_program = anshelper.compile_program(algod_client, str.encode(f1.read()))
+	ans_clear_program = anshelper.compile_program(algod_client, str.encode(f2.read()))
+	
+	print(ans_clear_program)
 
 	hash = hashlib.new('sha512_256')
-	hash.update(compiled_approval_program)
+	hash.update(ans_app_program)
 	digest = hash.hexdigest()
 	print(digest)
 	hash2 = hashlib.new('sha512_256')
-	hash2.update(compiled_clear_state_program)
+	hash2.update(ans_clear_program)
 	digest2 = hash2.hexdigest()
 	print(digest2)
 	#b64 = b64encode(bytes.fromhex(digest)).decode()
@@ -398,7 +401,7 @@ def DAOAddProposalSocial(
 			"add_proposal".encode("utf-8"),
 			"social".encode("utf-8"),
 			duration.to_bytes(8, 'big'),
-			"https://github.com/someproposal",
+			"https://github.com/lmedury/testing-git-apis/issues/3",
 			app_program,
 			clear_program
 		],
@@ -464,7 +467,7 @@ def DAOAddProposalFunding(
 			"add_proposal".encode("utf-8"),
 			"funding".encode("utf-8"),
 			duration.to_bytes(8, 'big'),
-			"https://github.com/someproposal".encode("utf-8"),
+			"https://github.com/lmedury/testing-git-apis/issues/3".encode("utf-8"),
 			amt_algos.to_bytes(8, 'big'),
 			amt_ans.to_bytes(8, 'big'),
 			app_program,
@@ -542,7 +545,7 @@ def DAOAddProposalUpdateReg(
 			"add_proposal".encode("utf-8"),
 			"updatereg".encode("utf-8"),
 			duration.to_bytes(8, 'big'),
-			"https://github.com/someproposal".encode("utf-8"),
+			"https://github.com/lmedury/testing-git-apis/issues/3".encode("utf-8"),
 			digest,
 			digest2,
 			rewards_app_program,
@@ -623,7 +626,7 @@ def DAOAddUpdateProposal(
 			"add_proposal".encode("utf-8"),
 			"dao_update".encode("utf-8"),
 			duration.to_bytes(8, 'big'),
-			"https://github.com/someproposal".encode("utf-8"),
+			"https://github.com/lmedury/testing-git-apis/issues/3".encode("utf-8"),
 			digest,
 			digest2,
 			rewards_app_program,

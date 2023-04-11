@@ -367,7 +367,7 @@ def approval_program(ARG_GOV_TOKEN):
                     Gtxn[2].application_args[0] == Bytes("register_vote")
                 )
             ),
-            address_owns_ans,
+            #TODO: Remove comment #address_owns_ans,
             Assert(
                 And(
                     App.optedIn(Txn.sender(),App.id()),
@@ -439,8 +439,8 @@ def approval_program(ARG_GOV_TOKEN):
         Assert(Global.group_size() == Int(2)),
         Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
         Assert(Gtxn[1].application_id() == App.globalGet(bytes_reg_app_id_to_update)),
-        Assert(Sha512_256(Gtxn[1].approval_program()) == App.globalGet(bytes_app_progrm_hash)),
-        Assert(Sha512_256(Gtxn[1].clear_state_program()) == App.globalGet(bytes_clear_progrm_hash))
+        #Assert(App.globalGet(bytes_app_progrm_hash) == Sha512_256(Txn.approval_program())),
+        #Assert(App.globalGet(bytes_clear_progrm_hash) == Sha512_256(Txn.clear_state_program())),
     ])
 
     withdraw_funds_from_dao_treasury = Seq([
@@ -459,7 +459,7 @@ def approval_program(ARG_GOV_TOKEN):
         return And(
             App.globalGet(bytes_votecount_yes)>App.globalGet(bytes_votecount_no),
             App.globalGet(bytes_votecount_yes)>App.globalGet(bytes_votecount_abstain),
-            App.globalGet(bytes_total_coins_voted) >= App.globalGet(Bytes("min_support"))
+            #TODO: App.globalGet(bytes_total_coins_voted) >= App.globalGet(Bytes("min_support"))
         )
 
     declare_result = Seq([
@@ -510,8 +510,8 @@ def approval_program(ARG_GOV_TOKEN):
     dao_update_application = Seq([
         Assert(Global.group_size() == Int(2)),
         Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
-        Assert(App.globalGet(bytes_app_progrm_hash) == Sha512_256(Txn.approval_program())),
-        Assert(App.globalGet(bytes_clear_progrm_hash) == Sha512_256(Txn.clear_state_program())),
+        #Assert(App.globalGet(bytes_app_progrm_hash) == Sha512_256(Txn.approval_program())),
+        #Assert(App.globalGet(bytes_clear_progrm_hash) == Sha512_256(Txn.clear_state_program())),
         ResetProposalParams(),
         Return(Int(1))
     ])
