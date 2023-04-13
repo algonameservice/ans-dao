@@ -23,7 +23,7 @@ SOFTWARE.
 from pyteal import *
 from . import constants
 
-def approval_program(registry_controller: str):
+def approval_program():
 
     get_arg_1 = Txn.application_args[1]
     get_arg_2 = Txn.application_args[2]
@@ -39,7 +39,9 @@ def approval_program(registry_controller: str):
     property_to_delete = App.localGetEx(Int(1), App.id(), Txn.application_args[1])
 
     on_creation = Seq([
-        App.globalPut(Bytes("name_controller"), Txn.accounts[1]),
+        #App.globalPut(Bytes("name_controller"), Addr(account)),
+        App.globalPut(Bytes("name_controller"), Txn.sender()),
+        #App.globalPut(Bytes("dao_dapp_id"), Btoi(Txn.application_args[0])),
         Return(Int(1))
     ])
 
@@ -48,16 +50,13 @@ def approval_program(registry_controller: str):
     @Subroutine(TealType.uint64)
     def basic_txn_checks():
         return Seq([
-            #No rekey
-            #No foreign apps
-            #No assets
-            #Lease? I did not understand
             For(i.store(Int(0)), i.load() < Global.group_size(), i.store(i.load() + Int(1))).Do(
                 Assert(
                     And(
                         Gtxn[i.load()].rekey_to() == Global.zero_address(),
                         Gtxn[i.load()].applications.length() == Int(0),
-                        Gtxn[i.load()].assets.length() == Int(0)
+                        Gtxn[i.load()].assets.length() == Int(0),
+                        Gtxn[i.load()].fee() <= Int(1000)
                     )
                 )
             ),
@@ -85,7 +84,41 @@ def approval_program(registry_controller: str):
             Return(Int(1))
         ])        
 
-                
+    @Subroutine(TealType.uint64)
+    def reset_domain_properties():
+        return Seq([
+            discord := App.localGetEx(Int(1), Txn.application_id(), Bytes("discord")),
+            discord,
+            If(discord.hasValue()).Then(App.localDel(Int(1), Bytes("discord"))),
+            github := App.localGetEx(Int(1), Txn.application_id(), Bytes("github")),
+            github,
+            If(github.hasValue()).Then(App.localDel(Int(1), Bytes("github"))),
+            twitter := App.localGetEx(Int(1), Txn.application_id(), Bytes("twitter")),
+            twitter,
+            If(twitter.hasValue()).Then(App.localDel(Int(1), Bytes("twitter"))),
+            reddit := App.localGetEx(Int(1), Txn.application_id(), Bytes("reddit")),
+            reddit,
+            If(reddit.hasValue()).Then(App.localDel(Int(1), Bytes("reddit"))),
+            telegram := App.localGetEx(Int(1), Txn.application_id(), Bytes("telegram")),
+            telegram,
+            If(telegram.hasValue()).Then(App.localDel(Int(1), Bytes("telegram"))),
+            youtube := App.localGetEx(Int(1), Txn.application_id(), Bytes("youtube")),
+            youtube,
+            If(youtube.hasValue()).Then(App.localDel(Int(1), Bytes("youtube"))),
+            avatar := App.localGetEx(Int(1), Txn.application_id(), Bytes("avatar")),
+            avatar,
+            If(avatar.hasValue()).Then(App.localDel(Int(1), Bytes("avatar"))),
+            content := App.localGetEx(Int(1), Txn.application_id(), Bytes("content")),
+            content,
+            If(content.hasValue()).Then(App.localDel(Int(1), Bytes("content"))),
+            ipaddress := App.localGetEx(Int(1), Txn.application_id(), Bytes("ipaddress")),
+            ipaddress,
+            If(ipaddress.hasValue()).Then(App.localDel(Int(1), Bytes("ipaddress"))),
+            is_default := App.localGetEx(Int(1), Txn.application_id(), Bytes("is_default")),
+            is_default,
+            If(is_default.hasValue()).Then(App.localDel(Int(1), Bytes("is_default"))),
+            Return(Int(1))
+        ])           
         
     is_valid_registration_txn = Seq([
         
@@ -158,7 +191,7 @@ def approval_program(registry_controller: str):
         Txn.application_args[1] != Bytes("transfer_price"),
         Txn.application_args[1] != Bytes("transfer_to"),
         Txn.application_args[1] != Bytes("subdomain"),
-        Txn.application_args[1] != Bytes("account")
+        Txn.application_args[1] != Bytes("value")
     )
 
     register_name = Seq([
@@ -195,7 +228,7 @@ def approval_program(registry_controller: str):
         App.localPut(Int(1), Bytes("subdomain"), Int(0)),
         App.localPut(Int(1), Bytes("transfer_price"), Bytes("")),
         App.localPut(Int(1), Bytes("transfer_to"), Bytes("")),
-        App.localPut(Int(1), Bytes("account"), Txn.sender()),
+        App.localPut(Int(1), Bytes("value"), Txn.sender()),
         App.localPut(Int(1), Bytes("name"), Txn.application_args[1]),
         Return(Int(1))
     ])
@@ -225,7 +258,7 @@ def approval_program(registry_controller: str):
         Assert(get_arg_1 != Bytes("expiry")),
         Assert(get_arg_1 != Bytes("transfer_price")),
         Assert(get_arg_1 != Bytes("transfer_to")),
-        Assert(get_arg_1 != Bytes("account")),
+        Assert(get_arg_1 != Bytes("value")),
         Assert(is_name_owner == Txn.sender()),
         App.localPut(Int(1), get_arg_1, get_arg_2),
         Return(Int(1))
@@ -234,9 +267,9 @@ def approval_program(registry_controller: str):
     update_resolver_account = Seq([
         Assert(basic_txn_checks() == Int(1)),
         Assert(Global.group_size() == Int(1)),
+        Assert(Txn.application_args.length() == Int(1)),
         Assert(is_name_owner == Txn.sender()),
-        Assert(get_arg_1 == Bytes("account")),
-        App.localPut(Int(1), Bytes("account"), Txn.accounts[2]),
+        App.localPut(Int(1), Bytes("value"), Txn.accounts[2]),
         Return(Int(1))
     ])
 
@@ -245,7 +278,7 @@ def approval_program(registry_controller: str):
         Assert(is_name_owner == Txn.sender()),
         Assert(Txn.application_args.length() == Int(1)),
         Assert(Txn.accounts.length() == Int(1)),
-        App.localPut(Int(1), Bytes("default_account"), Int(1)),
+        App.localPut(Int(1), Bytes("is_default"), Int(1)),
         Return(Int(1))
     ])
 
@@ -297,15 +330,11 @@ def approval_program(registry_controller: str):
         Assert(Gtxn[1].amount() == Int(constants.COST_FOR_TRANSFER)),
         Assert(Gtxn[1].rekey_to() == Global.zero_address()),
         Assert(check_closeremndr(Int(1)) == Int(1)),
+        Assert(reset_domain_properties() == Int(1)),
         App.localPut(Int(1), Bytes("owner"), Gtxn[0].sender()),
+        App.localPut(Int(1), Bytes("value"), Gtxn[0].sender()),
         App.localPut(Int(1), Bytes("transfer_to"), Bytes("")),
         App.localPut(Int(1), Bytes("transfer_price"), Int(0)),
-        App.localPut(Int(1), Bytes("discord"), Bytes("")),
-        App.localPut(Int(1), Bytes("github"), Bytes("")),
-        App.localPut(Int(1), Bytes("twitter"), Bytes("")),
-        App.localPut(Int(1), Bytes("reddit"), Bytes("")),
-        App.localPut(Int(1), Bytes("telegram"), Bytes("")),
-        App.localPut(Int(1), Bytes("youtube"), Bytes("")),
         App.localPut(Int(1), Bytes("subdomain"), Int(0)),
         Return(Int(1))
     ])
@@ -319,6 +348,7 @@ def approval_program(registry_controller: str):
                 TxnField.type_enum: TxnType.Payment,
                 TxnField.receiver: Txn.accounts[1],
                 TxnField.amount: Btoi(Txn.application_args[1]),
+                TxnField.fee: Int(1000)
             }
         ),
         InnerTxnBuilder.Submit(),
@@ -326,8 +356,11 @@ def approval_program(registry_controller: str):
     )
 
     update_or_delete_application = Seq([
-        Assert(basic_txn_checks() == Int(1)),
-        Assert(Txn.sender() == App.globalGet(Bytes("name_controller"))),
+        #Assert(basic_txn_checks() == Int(1)),
+        Assert(Global.group_size() == Int(2)),
+        Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
+        Assert(Gtxn[0].application_id() == App.globalGet(Bytes("dao_dapp_id"))),
+        Assert(Gtxn[1].application_id() == Global.current_application_id()),
         Return(Int(1))
     ])
 
@@ -335,6 +368,18 @@ def approval_program(registry_controller: str):
         Assert(basic_txn_checks() == Int(1)),
         Assert(Txn.sender() == App.globalGet(Bytes("name_controller"))),
         App.globalPut(get_arg_1, get_arg_2),
+        Return(Int(1))
+    ])
+
+    update_controller = Seq([
+        #Assert(Txn.sender() == App.globalGet(Bytes("name_controller"))),
+        App.globalPut(Bytes("name_controller"), Txn.accounts[1]),
+        Return(Int(1))
+    ])
+
+    update_app_id = Seq([
+        #Assert(Txn.sender() == App.globalGet(Bytes("name_controller"))),
+        App.globalPut(Bytes("dao_dapp_id"), Txn.applications[1]),
         Return(Int(1))
     ])
 
@@ -346,6 +391,9 @@ def approval_program(registry_controller: str):
         [Txn.on_completion() == OnComplete.CloseOut, Return(Int(0))],
         [Txn.on_completion() == OnComplete.ClearState, Return(Int(0))],
         [Txn.application_args[0] == Bytes("update_global_state"), update_global_state],
+        #TODO: Remove these two below
+        [Txn.application_args[0] == Bytes("update_controller"), update_controller],
+        [Txn.application_args[0] == Bytes("update_app_id"), update_app_id],
         [Txn.application_args[0] == Bytes("register_name"), register_name],
         [Txn.application_args[0] == Bytes("update_name"), update_name],
         [Txn.application_args[0] == Bytes("remove_property"), remove_property],
@@ -356,7 +404,6 @@ def approval_program(registry_controller: str):
         [Txn.application_args[0] == Bytes("accept_transfer"), accept_transfer],
         [Txn.application_args[0] == Bytes("withdraw_transfer"), withdraw_transfer],
         [Txn.application_args[0] == Bytes("withdraw_funds"), withdraw_funds]
-        
     )
 
     return program
@@ -364,3 +411,23 @@ def approval_program(registry_controller: str):
 def clear_state_program():
     return Int(1) 
 
+
+with open('dot_algo_registry_approval.teal', 'w') as f:
+    compiled = compileTeal(approval_program(), Mode.Application, version=6)
+    f.write(compiled)
+
+with open('dot_algo_registry_clear_state.teal', 'w') as f:
+    compiled = compileTeal(clear_state_program(), Mode.Application, version=6)
+    f.write(compiled)
+
+
+'''
+Assert(Global.group_size() == Int(2)),
+        Assert(Gtxn[0].application_args[0] == Bytes("declare_result")),
+        Assert(Gtxn[0].application_id() == App.globalGet(Bytes("dao_dapp_id"))),
+        Assert(Gtxn[1].application_id() == Global.current_application_id()),
+        app_program_hash := App.globalGetEx(Gtxn[0].application_id(), Bytes("reg_app_progrm_hash")),
+        Assert(Sha512_256(Gtxn[1].approval_program()) == app_program_hash.value()),
+        clear_program_hash := App.globalGetEx(Gtxn[0].application_id(), Bytes("reg_clear_progrm_hash")),
+        Assert(Sha512_256(Gtxn[1].clear_state_program()) == clear_program_hash.value()),
+'''
